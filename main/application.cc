@@ -1027,6 +1027,15 @@ void Application::HandleStateChangedEvent() {
             }
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(true);
+              // ─── Play pending music kalau ada ───
+    if (!pending_music_url_.empty()) {
+        std::string url = pending_music_url_;
+        pending_music_url_.clear();
+        ESP_LOGI(TAG, "Device idle, play pending music: %s", url.c_str());
+        Schedule([this, url]() {
+            StartNotification(url, {});
+        });
+    }
             break;
         case kDeviceStateConnecting:
             display->SetStatus(Lang::Strings::CONNECTING);
@@ -1071,15 +1080,6 @@ void Application::HandleStateChangedEvent() {
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(false);
 
-        
-    // Keep a just-raised network error visible...
-    if (last_error_message_.empty()) {
-        display->SetStatus(Lang::Strings::STANDBY);
-        display->ClearChatMessages();
-        display->SetEmotion("neutral");
-    }
-    audio_service_.EnableVoiceProcessing(false);
-    audio_service_.EnableWakeWordDetection(true);
             break;
         default:
             // Do nothing
