@@ -22,7 +22,7 @@ jobs:
           BOARD: bread-compact-wifi
         run: |
           source "$IDF_PATH/export.sh"
-          python scripts/build.py "$BOARD"
+          python scripts/build.py "$BOARD" --name bread-compact-wifi
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
