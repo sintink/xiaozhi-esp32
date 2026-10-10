@@ -1153,6 +1153,16 @@ void Application::StartNotification(std::string audio_url, std::vector<NotifySub
     }
 }
 
+void Application::PlayMusicFromUrl(const std::string& url) {
+    Schedule([this, url]() {
+        if (GetDeviceState() != kDeviceStateIdle) {
+            ESP_LOGW(TAG, "Device sibuk, gak bisa play musik");
+            return;
+        }
+        StartNotification(url, {});
+    });
+}
+
 void Application::StopNotification() {
     notify_player_.Stop();
     audio_service_.ResetDecoder();
