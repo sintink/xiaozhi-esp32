@@ -8,30 +8,24 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.1
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: 'recursive'
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Build with ESP-IDF
-      uses: espressif/esp-idf-ci-action@v1
-      with:
-        esp_idf_version: v5.3.1
-        target: esp32s3
-        path: '.'
-        command: |
-          idf.py set-target esp32s3
-          idf.py build
-          cd build && esptool.py --chip esp32s3 merge_bin \
-            -o merged-binary.bin \
-            --flash_mode dio --flash_freq 80m --flash_size 16MB \
-            0x0 bootloader/bootloader.bin \
-            0x8000 partition_table/partition-table.bin \
-            0x10000 xiaozhi.bin
+      - name: Build firmware
+        shell: bash
+        env:
+          BOARD: bread-compact-wifi
+        run: |
+          source "$IDF_PATH/export.sh"
+          python scripts/build.py "$BOARD" --name my-build
 
-    - name: Upload firmware
-      uses: actions/upload-artifact@v4
-      with:
-        name: xiaozhi-firmware
-        path: build/merged-binary.bin
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaozhi-firmware
+          path: build/merged-binary.bin
