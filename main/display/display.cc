@@ -10,6 +10,7 @@
 #include "board.h"
 #include "lvgl_display/lvgl_image.h"
 #include "settings.h"
+#include "http_bridge.h"  
 
 #define TAG "Display"
 
@@ -36,6 +37,13 @@ void Display::SetEmotion(const char* emotion) { ESP_LOGW(TAG, "SetEmotion: %s", 
 void Display::SetChatMessage(const char* role, const char* content) {
     ESP_LOGW(TAG, "Role:%s", role);
     ESP_LOGW(TAG, "     %s", content);
+    
+    // Forward ke WROOM
+    if (strcmp(role, "user") == 0) {
+        HttpBridgeSend("LISTENING", content);
+    } else if (strcmp(role, "assistant") == 0) {
+        HttpBridgeSend("SPEAKING", content);
+    }
 }
 
 void Display::ClearChatMessages() {
