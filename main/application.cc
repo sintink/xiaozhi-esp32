@@ -1,4 +1,5 @@
 #include "application.h"
+#include "http_bridge.h"
 #include "assets.h"
 #include "assets/lang_config.h"
 #include "audio_codec.h"
@@ -645,11 +646,15 @@ void Application::InitializeProtocol() {
                         glyphs.clear();
                     }
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
-                    Schedule([display, message = std::string(text->valuestring),
-                              glyphs = std::move(glyphs), bpp]() {
-                        display->AddTextGlyphs(glyphs, bpp);
-                        display->SetChatMessage("assistant", message.c_str());
-                    });
+{
+    std::string msg_copy = std::string(text->valuestring);
+    HttpBridgeSend("SPEAKING", msg_copy);
+}
+Schedule([display, message = std::string(text->valuestring),
+          glyphs = std::move(glyphs), bpp]() {
+    display->AddTextGlyphs(glyphs, bpp);
+    display->SetChatMessage("assistant", message.c_str());
+});
                 }
             }
         } else if (strcmp(type->valuestring, "stt") == 0) {
@@ -661,11 +666,15 @@ void Application::InitializeProtocol() {
                     glyphs.clear();
                 }
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
-                Schedule([display, message = std::string(text->valuestring),
-                          glyphs = std::move(glyphs), bpp]() {
-                    display->AddTextGlyphs(glyphs, bpp);
-                    display->SetChatMessage("user", message.c_str());
-                });
+{
+    std::string msg_copy = std::string(text->valuestring);
+    HttpBridgeSend("LISTENING", msg_copy);
+}
+Schedule([display, message = std::string(text->valuestring),
+          glyphs = std::move(glyphs), bpp]() {
+    display->AddTextGlyphs(glyphs, bpp);
+    display->SetChatMessage("user", message.c_str());
+});
             }
         } else if (strcmp(type->valuestring, "llm") == 0) {
             auto emotion = cJSON_GetObjectItem(root, "emotion");
