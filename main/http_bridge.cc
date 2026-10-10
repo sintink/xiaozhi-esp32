@@ -1,5 +1,6 @@
 #include "http_bridge.h"
 #include <esp_http_client.h>
+#include <esp_log.h>
 #include <cstring>
 
 #define WROOM_URL "http://192.168.1.138/api/xiaozhi"
