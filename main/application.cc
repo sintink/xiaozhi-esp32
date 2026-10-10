@@ -1070,6 +1070,16 @@ void Application::HandleStateChangedEvent() {
         case kDeviceStateWifiConfiguring:
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(false);
+
+        
+    // Keep a just-raised network error visible...
+    if (last_error_message_.empty()) {
+        display->SetStatus(Lang::Strings::STANDBY);
+        display->ClearChatMessages();
+        display->SetEmotion("neutral");
+    }
+    audio_service_.EnableVoiceProcessing(false);
+    audio_service_.EnableWakeWordDetection(true);
             break;
         default:
             // Do nothing
