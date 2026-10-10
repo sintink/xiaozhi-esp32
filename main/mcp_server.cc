@@ -21,6 +21,22 @@
 
 #define TAG "MCP"
 
+static std::string UrlEncode(const std::string& s) {
+    static const char hex[] = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(s.size() * 3);
+    for (unsigned char c : s) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            out += (char)c;
+        } else {
+            out += '%';
+            out += hex[c >> 4];
+            out += hex[c & 0xF];
+        }
+    }
+    return out;
+}
+
 McpServer::McpServer() {}
 
 McpServer::~McpServer() = default;
@@ -115,6 +131,55 @@ void McpServer::AddCommonTools() {
                 });
     }
 #endif
+
+    // ─── Tool: Play Music dari STB ───
+AddTool("self.music.play",
+        "Putar lagu atau musik. Gunakan tool ini kalau user minta memutar lagu, "
+        "musik, atau nyanyi. Args:\n"
+        "  query: judul lagu, nama artis, atau kata kunci pencarian.\n"
+        "  Contoh: 'Judika', 'Bukan Dia', 'Sheila On 7'.",
+        PropertyList({Property("query", kPropertyTypeString)}),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto query = properties["query"].value<std::string>();
+            ESP_LOGI(TAG, "Play music request: %s", query.c_str());
+
+            // Step 1: minta STB siapin stream Opus
+            std::string url = "http://192.168.1.199/api/set-musik.php?format=opus&q="
+                              + UrlEncode(query);
+
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(5);
+            if (auto opened = http->Open("GET", url); !opened) {
+                ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
+                return false;
+            }
+            if (auto status = http->GetStatusCode(); !status || *status != 200) {
+                ESP_LOGE(TAG, "STB error status: %d", status ? *status : -1);
+                http->Close();
+                return false;
+            }
+            std::string response = http->ReadAll();
+            http->Close();
+
+            // Step 2: parse audio_url dari response JSON
+            cJSON* root = cJSON_Parse(response.c_str());
+            if (!root) {
+                ESP_LOGE(TAG, "Gagal parse JSON: %s", response.c_str());
+                return false;
+            }
+            auto audio_url = cJSON_GetObjectItem(root, "audio_url");
+            if (!cJSON_IsString(audio_url) || audio_url->valuestring[0] == '\0') {
+                ESP_LOGE(TAG, "audio_url kosong");
+                cJSON_Delete(root);
+                return false;
+            }
+            std::string music_url = audio_url->valuestring;
+            cJSON_Delete(root);
+
+            // Step 3: play
+            Application::GetInstance().PlayMusicFromUrl(music_url);
+            return true;
+        });
+    
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), std::make_move_iterator(original_tools.begin()),
