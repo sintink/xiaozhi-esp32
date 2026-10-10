@@ -36,9 +36,9 @@ void HttpBridgeSend(const std::string& state, const std::string& text) {
     esp_err_t err = esp_http_client_perform(client);
     if (err == ESP_OK) {
         int status = esp_http_client_get_status_code(client);
-        printf("HTTP-BRIDGE", "%s -> WROOM %d", state.c_str(), status);
+        printf("[HTTP-BRIDGE] %s -> WROOM %d\n", state.c_str(), status);
     } else {
-        printf("HTTP-BRIDGE", "%s -> gagal: %s", state.c_str(), esp_err_to_name(err));
+        printf("[HTTP-BRIDGE] %s -> gagal: %s\n", state.c_str(), esp_err_to_name(err));
     }
     esp_http_client_cleanup(client);
 }
