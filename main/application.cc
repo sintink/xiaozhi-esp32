@@ -1154,13 +1154,19 @@ void Application::StartNotification(std::string audio_url, std::vector<NotifySub
 }
 
 void Application::PlayMusicFromUrl(const std::string& url) {
-    Schedule([this, url]() {
-        if (GetDeviceState() != kDeviceStateIdle) {
-            ESP_LOGW(TAG, "Device sibuk, gak bisa play musik");
-            return;
-        }
+    ESP_LOGI(TAG, "PlayMusicFromUrl called: %s", url.c_str());
+    
+    auto state = GetDeviceState();
+    if (state == kDeviceStateIdle && !notify_player_.IsBusy()) {
+        ESP_LOGI(TAG, "Langsung play musik");
         StartNotification(url, {});
-    });
+    } else {
+        ESP_LOGI(TAG, "Device sibuk (%d), queue musik sampai idle", (int)state);
+        pending_music_url_ = url;
+        if (state == kDeviceStateSpeaking) {
+            AbortSpeaking(kAbortReasonNone);
+        }
+    }
 }
 
 void Application::StopNotification() {
