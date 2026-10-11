@@ -358,7 +358,7 @@ void Application::HandleActivationDoneEvent() {
     // events back-to-back because the activation task is lower priority.
     const bool has_error = !last_error_message_.empty();
     if (!has_error) {
-        auto display = Board::GetInstance().GetDisplay()
+        auto display = Board::GetInstance().GetDisplay();
         std::string message = std::string(Lang::Strings::VERSION) + ota_->GetCurrentVersion();
         display->ShowNotification(message.c_str());
         display->SetChatMessage("system", "");
