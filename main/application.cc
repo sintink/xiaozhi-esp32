@@ -805,6 +805,7 @@ void Application::HandleToggleChatEvent() {
 
     if (state == kDeviceStateNotifying) {
         StopNotification();
+        return; 
         state = kDeviceStateIdle;
     }
 
@@ -1219,6 +1220,24 @@ void Application::CheckAndPlayPendingMusic() {
 }
 
 void Application::StopNotification() {
+    // Kirim perintah stop ke STB (kill yt-dlp + ffmpeg)
+    static bool stb_stop_sent = false;   // hindari spam
+    if (!stb_stop_sent) {
+        stb_stop_sent = true;
+        auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
+        if (http) {
+            if (auto opened = http->Open("GET", "http://192.168.1.199/api/musik-stop.php"); opened) {
+                ESP_LOGI(TAG, "Kirim stop ke STB");
+            } else {
+                ESP_LOGW(TAG, "Gagal kirim stop ke STB");
+            }
+            http->Close();
+        }
+        // Reset flag setelah 1 detik biar bisa dipakai lagi
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        stb_stop_sent = false;
+    }
+
     notify_player_.Stop();
     audio_service_.ResetDecoder();
     auto& board = Board::GetInstance();
