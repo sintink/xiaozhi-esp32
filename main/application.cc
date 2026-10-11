@@ -652,23 +652,33 @@ void Application::InitializeProtocol() {
                     }
                 });
             } else if (strcmp(state->valuestring, "sentence_start") == 0) {
-                auto text = cJSON_GetObjectItem(root, "text");
-                if (cJSON_IsString(text)) {
-                    std::vector<TextGlyph> glyphs;
-                    uint8_t bpp = 0;
-                    if (!TextGlyphPayload::Parse(root, glyphs, bpp)) {
-                        glyphs.clear();
-                    }
-                    ESP_LOGI(TAG, "<< %s", text->valuestring);
-{
-    std::string msg_copy = std::string(text->valuestring);
-    HttpBridgeSend("SPEAKING", msg_copy);
-}
-Schedule([display, message = std::string(text->valuestring),
-          glyphs = std::move(glyphs), bpp]() {
-    display->AddTextGlyphs(glyphs, bpp);
-    display->SetChatMessage("assistant", message.c_str());
-});
+    auto text = cJSON_GetObjectItem(root, "text");
+    if (cJSON_IsString(text)) {
+        std::vector<TextGlyph> glyphs;
+        uint8_t bpp = 0;
+        if (!TextGlyphPayload::Parse(root, glyphs, bpp)) {
+            glyphs.clear();
+        }
+
+        // ─── Filter text mentah dari cloud ───
+        std::string clean_text = std::string(text->valuestring);
+
+        if (clean_text.find("self.") != std::string::npos ||
+            (!clean_text.empty() && clean_text[0] == '%')) {
+            clean_text = "Memutar musik, tunggu sebentar ya...";
+            glyphs.clear();
+        }
+
+        ESP_LOGI(TAG, "<< %s", clean_text.c_str());
+        {
+            std::string msg_copy = clean_text;
+            HttpBridgeSend("SPEAKING", msg_copy);
+        }
+        Schedule([display, message = clean_text,
+                  glyphs = std::move(glyphs), bpp]() {
+            display->AddTextGlyphs(glyphs, bpp);
+            display->SetChatMessage("assistant", message.c_str());
+        });
                 }
             }
         } else if (strcmp(type->valuestring, "stt") == 0) {
