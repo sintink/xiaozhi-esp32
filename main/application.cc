@@ -1176,16 +1176,26 @@ void Application::StartNotification(std::string audio_url, std::vector<NotifySub
 
 void Application::PlayMusicFromUrl(const std::string& url) {
     ESP_LOGI(TAG, "PlayMusicFromUrl called: %s", url.c_str());
-    
+
     auto state = GetDeviceState();
+
+    // Kalau idle & gak sibuk → langsung main
     if (state == kDeviceStateIdle && !notify_player_.IsBusy()) {
         ESP_LOGI(TAG, "Langsung play musik");
         StartNotification(url, {});
-    } else {
-        ESP_LOGI(TAG, "Device sibuk (%d), queue musik sampai idle", (int)state);
-        pending_music_url_ = url;
-        if (state == kDeviceStateSpeaking) {
-            AbortSpeaking(kAbortReasonNone);
+        return;
+    }
+
+    // Queue musik
+    pending_music_url_ = url;
+    ESP_LOGI(TAG, "Device sibuk (%d), queue musik sampai idle", (int)state);
+
+    // Paksa keluar dari mode percakapan → state idle
+    if (state == kDeviceStateSpeaking || state == kDeviceStateListening) {
+        AbortSpeaking(kAbortReasonNone);
+        if (protocol_ && protocol_->IsAudioChannelOpened()) {
+            ESP_LOGI(TAG, "Tutup audio channel buat musik");
+            protocol_->CloseAudioChannel();
         }
     }
 }
