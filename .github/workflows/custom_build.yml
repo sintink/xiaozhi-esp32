@@ -25,7 +25,7 @@ jobs:
           BOARD: bread-compact-wifi
         run: |
           source "$IDF_PATH/export.sh"
-          python scripts/build.py "$BOARD" --name bread-compact-wifi
+          python scripts/build.py "$BOARD" --name bread-compact-wifi-128x64
 
       - name: Prepare files
         run: |
