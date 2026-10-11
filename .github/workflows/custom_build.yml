@@ -24,14 +24,20 @@ jobs:
           source "$IDF_PATH/export.sh"
           python scripts/build.py "$BOARD" --name bread-compact-wifi
 
-      - name: Copy binaries
+      - name: Prepare files
         run: |
           mkdir -p output
-          find build -name "*.bin" -type f -exec cp {} output/ \;
+          cp build/xiaozhi.bin output/ 2>/dev/null || true
+          cp build/merged-binary.bin output/ 2>/dev/null || true
           ls -lh output/
 
-      - name: Upload all
-        uses: actions/upload-artifact@v4
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: xiaozhi-firmware
-          path: output/*.bin
+          tag_name: latest
+          name: "Latest Build"
+          body: "Auto-built from commit ${{ github.sha }}"
+          files: |
+            output/xiaozhi.bin
+            output/merged-binary.bin
+          make_latest: true
