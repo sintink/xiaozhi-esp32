@@ -12,7 +12,7 @@
 #include "ogg_demuxer.h"
 
 namespace {
-constexpr int kHttpTimeoutMs = 5000;
+constexpr int kHttpTimeoutMs = 30000;
 constexpr size_t kHttpReadBufferSize = 1024;
 constexpr uint32_t kNotifyTaskStackSize = 6144;
 constexpr UBaseType_t kNotifyTaskPriority = 2;
