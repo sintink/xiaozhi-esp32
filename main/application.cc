@@ -46,6 +46,16 @@ Application::Application() : notify_player_(audio_service_) {
                                                 .name = "clock_timer",
                                                 .skip_unhandled_events = true};
     esp_timer_create(&clock_timer_args, &clock_timer_handle_);
+    esp_timer_create_args_t music_timer_args = {
+    .callback = [](void* arg) {
+        Application* app = (Application*)arg;
+        app->Schedule([app]() { app->CheckAndPlayPendingMusic(); });
+    },
+    .arg = this,
+    .dispatch_method = ESP_TIMER_TASK,
+    .name = "music_delay",
+    .skip_unhandled_events = true};
+esp_timer_create(&music_timer_args, &music_delay_timer_);
 }
 
 Application::~Application() {
@@ -54,6 +64,10 @@ Application::~Application() {
         esp_timer_stop(clock_timer_handle_);
         esp_timer_delete(clock_timer_handle_);
     }
+        if (music_delay_timer_ != nullptr) {
+        esp_timer_stop(music_delay_timer_);
+        esp_timer_delete(music_delay_timer_);
+        }
     vEventGroupDelete(event_group_);
 }
 
@@ -344,7 +358,7 @@ void Application::HandleActivationDoneEvent() {
     // events back-to-back because the activation task is lower priority.
     const bool has_error = !last_error_message_.empty();
     if (!has_error) {
-        auto display = Board::GetInstance().GetDisplay();
+        auto display = Board::GetInstance().GetDisplay()
         std::string message = std::string(Lang::Strings::VERSION) + ota_->GetCurrentVersion();
         display->ShowNotification(message.c_str());
         display->SetChatMessage("system", "");
@@ -1027,15 +1041,12 @@ void Application::HandleStateChangedEvent() {
             }
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(true);
-              // ─── Play pending music kalau ada ───
-    if (!pending_music_url_.empty()) {
-        std::string url = pending_music_url_;
-        pending_music_url_.clear();
-        ESP_LOGI(TAG, "Device idle, play pending music: %s", url.c_str());
-        Schedule([this, url]() {
-            StartNotification(url, {});
-        });
-    }
+               // ─── Schedule pending music dengan delay ───
+            if (!pending_music_url_.empty()) {
+                ESP_LOGI(TAG, "Schedule pending music check in 2s");
+                esp_timer_stop(music_delay_timer_);
+                esp_timer_start_once(music_delay_timer_, 2000000);  // 2 detik
+            }
             break;
         case kDeviceStateConnecting:
             display->SetStatus(Lang::Strings::CONNECTING);
@@ -1177,6 +1188,24 @@ void Application::PlayMusicFromUrl(const std::string& url) {
             AbortSpeaking(kAbortReasonNone);
         }
     }
+}
+
+void Application::CheckAndPlayPendingMusic() {
+    if (pending_music_url_.empty()) return;
+    if (GetDeviceState() != kDeviceStateIdle) {
+        ESP_LOGW(TAG, "Not idle, skip pending music");
+        return;
+    }
+    if (protocol_ && protocol_->IsAudioChannelOpened()) {
+        ESP_LOGW(TAG, "Audio channel still open, retry in 2s");
+        esp_timer_start_once(music_delay_timer_, 2000000);
+        return;
+    }
+    
+    std::string url = pending_music_url_;
+    pending_music_url_.clear();
+    ESP_LOGI(TAG, "Playing pending music: %s", url.c_str());
+    StartNotification(url, {});
 }
 
 void Application::StopNotification() {
