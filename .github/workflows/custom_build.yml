@@ -24,8 +24,14 @@ jobs:
           source "$IDF_PATH/export.sh"
           python scripts/build.py "$BOARD" --name bread-compact-wifi
 
-      - name: Upload firmware
+      - name: Copy binaries
+        run: |
+          mkdir -p output
+          find build -name "*.bin" -type f -exec cp {} output/ \;
+          ls -lh output/
+
+      - name: Upload all
         uses: actions/upload-artifact@v4
         with:
           name: xiaozhi-firmware
-          path: build/merged-binary.bin
+          path: output/*.bin
