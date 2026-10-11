@@ -12,6 +12,7 @@
 #include <iterator>
 #include <optional>
 
+#include "http_bridge.h"
 #include "application.h"
 #include "board.h"
 #include "display.h"
@@ -143,7 +144,35 @@ AddTool("self.music.play",
             auto query = properties["query"].value<std::string>();
             ESP_LOGI(TAG, "Play music request: %s", query.c_str());
 
-            // Step 1: minta STB siapin stream Opus
+            // ─── Step 1: Ambil judul dari STB (metadata) ───
+            std::string title = query;  // fallback
+            {
+                std::string info_url = "http://192.168.1.199/api/musik-info.php?q="
+                                       + UrlEncode(query);
+                auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+                if (http && http->Open("GET", info_url)) {
+                    if (auto status = http->GetStatusCode(); status && *status == 200) {
+                        std::string resp = http->ReadAll();
+                        cJSON* root = cJSON_Parse(resp.c_str());
+                        if (root) {
+                            auto t = cJSON_GetObjectItem(root, "title");
+                            if (cJSON_IsString(t) && t->valuestring[0] != '\0') {
+                                title = t->valuestring;
+                            }
+                            cJSON_Delete(root);
+                        }
+                        ESP_LOGI(TAG, "Metadata title: %s", title.c_str());
+                    }
+                    http->Close();
+                } else if (http) {
+                    http->Close();
+                }
+            }
+
+            // ─── Step 2: Kirim judul ke WROOM biar tampil di P10 ───
+            HttpBridgeSend("SPEAKING", "Memutar: " + title);
+
+            // ─── Step 3: Minta STB siapin stream Opus ───
             std::string url = "http://192.168.1.199/api/set-musik.php?format=opus&q="
                               + UrlEncode(query);
 
@@ -160,7 +189,7 @@ AddTool("self.music.play",
             std::string response = http->ReadAll();
             http->Close();
 
-            // Step 2: parse audio_url dari response JSON
+            // ─── Step 4: Parse audio_url ───
             cJSON* root = cJSON_Parse(response.c_str());
             if (!root) {
                 ESP_LOGE(TAG, "Gagal parse JSON: %s", response.c_str());
@@ -175,11 +204,10 @@ AddTool("self.music.play",
             std::string music_url = audio_url->valuestring;
             cJSON_Delete(root);
 
-            // Step 3: play
+            // ─── Step 5: Play ───
             Application::GetInstance().PlayMusicFromUrl(music_url);
             return true;
         });
-    
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), std::make_move_iterator(original_tools.begin()),
