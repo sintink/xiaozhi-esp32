@@ -118,6 +118,7 @@ public:
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
     void PlayMusicFromUrl(const std::string& url);
+    void CheckAndPlayPendingMusic();   
     AudioService& GetAudioService() { return audio_service_; }
     
     /**
@@ -136,6 +137,7 @@ private:
     std::unique_ptr<Protocol> protocol_;
     EventGroupHandle_t event_group_ = nullptr;
     esp_timer_handle_t clock_timer_handle_ = nullptr;
+    esp_timer_handle_t music_delay_timer_ = nullptr;  
     DeviceStateMachine state_machine_;
     ListeningMode listening_mode_ = kListeningModeAutoStop;
     AecMode aec_mode_ = kAecOff;
