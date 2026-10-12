@@ -181,7 +181,6 @@ void OledDisplay::SetupUI_128x64() {
     auto lvgl_theme = static_cast<LvglTheme*>(current_theme_);
     auto text_font = lvgl_theme->text_font()->font();
     auto icon_font = lvgl_theme->icon_font()->font();
-    auto large_icon_font = lvgl_theme->large_icon_font()->font();
 
     auto screen = lv_screen_active();
     lv_obj_set_style_text_font(screen, text_font, 0);
@@ -277,7 +276,7 @@ lv_obj_set_size(eyes_box, 84, 28);
 lv_obj_set_style_bg_opa(eyes_box, LV_OPA_TRANSP, 0);
 lv_obj_set_style_border_width(eyes_box, 0, 0);
 lv_obj_set_style_pad_all(eyes_box, 0, 0);
-lv_obj_set_style_flex_flow(eyes_box, LV_FLEX_FLOW_ROW);
+lv_obj_set_flex_flow(eyes_box, LV_FLEX_FLOW_ROW);
 lv_obj_set_style_flex_main_place(eyes_box, LV_FLEX_ALIGN_CENTER, 0);
 lv_obj_set_style_flex_cross_place(eyes_box, LV_FLEX_ALIGN_CENTER, 0);
 lv_obj_set_style_pad_column(eyes_box, 20, 0);
