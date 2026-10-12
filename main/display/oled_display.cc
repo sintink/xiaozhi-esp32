@@ -264,7 +264,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_flex_main_place(content_, LV_FLEX_ALIGN_CENTER, 0);
 
     content_left_ = lv_obj_create(content_);
-lv_obj_set_size(content_left_, 40, LV_SIZE_CONTENT);
+lv_obj_set_size(content_left_, 40, 22);
 lv_obj_set_style_pad_all(content_left_, 0, 0);
 lv_obj_set_style_border_width(content_left_, 0, 0);
 lv_obj_set_style_bg_opa(content_left_, LV_OPA_TRANSP, 0);
@@ -281,7 +281,7 @@ lv_obj_center(eyes_box);
 eye_left_ = lv_obj_create(eyes_box);
 lv_obj_set_size(eye_left_, 12, 14);
 lv_obj_set_style_radius(eye_left_, 4, 0);   // rounded
-lv_obj_set_style_bg_color(eye_left_, lv_color_white(), 0);
+lv_obj_set_style_bg_color(eye_left_, lv_color_black(), 0);
 lv_obj_set_style_bg_opa(eye_left_, LV_OPA_COVER, 0);
 lv_obj_set_style_border_width(eye_left_, 0, 0);
 lv_obj_align(eye_left_, LV_ALIGN_LEFT_MID, 2, 0);
@@ -290,7 +290,7 @@ lv_obj_align(eye_left_, LV_ALIGN_LEFT_MID, 2, 0);
 eye_right_ = lv_obj_create(eyes_box);
 lv_obj_set_size(eye_right_, 12, 14);
 lv_obj_set_style_radius(eye_right_, 4, 0);
-lv_obj_set_style_bg_color(eye_right_, lv_color_white(), 0);
+lv_obj_set_style_bg_color(eye_right_, lv_color_black(), 0);
 lv_obj_set_style_bg_opa(eye_right_, LV_OPA_COVER, 0);
 lv_obj_set_style_border_width(eye_right_, 0, 0);
 lv_obj_align(eye_right_, LV_ALIGN_RIGHT_MID, -2, 0);
