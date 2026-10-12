@@ -12,6 +12,7 @@
 #include <esp_lvgl_port.h>
 #include <material_symbols.h>
 #include <noto_emoji.h>
+#include <esp_random.h>
 
 #define TAG "OledDisplay"
 
@@ -106,6 +107,11 @@ OledDisplay::~OledDisplay() {
     if (content_ != nullptr) {
         lv_obj_del(content_);
     }
+
+  if (eye_timer_ != nullptr) {
+    lv_timer_del(eye_timer_);
+    eye_timer_ = nullptr;
+}
 
     bool is_128x64_layout = (top_bar_ != nullptr);
     if (status_bar_ != nullptr && is_128x64_layout) {
@@ -258,16 +264,40 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_flex_main_place(content_, LV_FLEX_ALIGN_CENTER, 0);
 
     content_left_ = lv_obj_create(content_);
-    lv_obj_set_size(content_left_, 32, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_all(content_left_, 0, 0);
-    lv_obj_set_style_border_width(content_left_, 0, 0);
+lv_obj_set_size(content_left_, 40, LV_SIZE_CONTENT);
+lv_obj_set_style_pad_all(content_left_, 0, 0);
+lv_obj_set_style_border_width(content_left_, 0, 0);
+lv_obj_set_style_bg_opa(content_left_, LV_OPA_TRANSP, 0);
 
-    emotion_label_ = lv_label_create(content_left_);
-    lv_obj_set_style_text_font(emotion_label_, large_icon_font, 0);
-    lv_label_set_text(emotion_label_, MATERIAL_SYMBOLS_ROBOT_2);
-    lv_obj_center(emotion_label_);
-    lv_obj_set_style_pad_top(emotion_label_, 8, 0);
+// Container mata
+lv_obj_t* eyes_box = lv_obj_create(content_left_);
+lv_obj_set_size(eyes_box, 36, 20);
+lv_obj_set_style_bg_opa(eyes_box, LV_OPA_TRANSP, 0);
+lv_obj_set_style_border_width(eyes_box, 0, 0);
+lv_obj_set_style_pad_all(eyes_box, 0, 0);
+lv_obj_center(eyes_box);
 
+// Mata kiri — putih, bentuk kotak rounded
+eye_left_ = lv_obj_create(eyes_box);
+lv_obj_set_size(eye_left_, 12, 14);
+lv_obj_set_style_radius(eye_left_, 4, 0);   // rounded
+lv_obj_set_style_bg_color(eye_left_, lv_color_white(), 0);
+lv_obj_set_style_bg_opa(eye_left_, LV_OPA_COVER, 0);
+lv_obj_set_style_border_width(eye_left_, 0, 0);
+lv_obj_align(eye_left_, LV_ALIGN_LEFT_MID, 2, 0);
+
+// Mata kanan
+eye_right_ = lv_obj_create(eyes_box);
+lv_obj_set_size(eye_right_, 12, 14);
+lv_obj_set_style_radius(eye_right_, 4, 0);
+lv_obj_set_style_bg_color(eye_right_, lv_color_white(), 0);
+lv_obj_set_style_bg_opa(eye_right_, LV_OPA_COVER, 0);
+lv_obj_set_style_border_width(eye_right_, 0, 0);
+lv_obj_align(eye_right_, LV_ALIGN_RIGHT_MID, -2, 0);
+
+InitEyes();
+  
+  
     content_right_ = lv_obj_create(content_);
     lv_obj_set_size(content_right_, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_style_pad_all(content_right_, 0, 0);
@@ -393,23 +423,37 @@ void OledDisplay::SetupUI_128x32() {
 }
 
 void OledDisplay::SetEmotion(const char* emotion) {
-    auto lvgl_theme = static_cast<LvglTheme*>(current_theme_);
-    const char* utf8 = noto_emoji_get_utf8(emotion);
-    const lv_font_t* emotion_font = lvgl_theme->emoji_font()->font();
-    if (utf8 == nullptr) {
-        utf8 = material_symbols_get_utf8(emotion);
-        emotion_font = lvgl_theme->large_icon_font()->font();
-    }
+    if (emotion == nullptr || eye_left_ == nullptr) return;
+
     DisplayLockGuard lock(this);
-    if (emotion_label_ == nullptr) {
-        return;
-    }
-    if (utf8 != nullptr) {
-        lv_obj_set_style_text_font(emotion_label_, emotion_font, 0);
-        lv_label_set_text(emotion_label_, utf8);
+    std::string e(emotion);
+
+    if (e == "happy" || e == "laughing") {
+        // Mata jadi kurva gembira (pendek & lebar)
+        lv_obj_set_size(eye_left_, 12, 6);
+        lv_obj_set_size(eye_right_, 12, 6);
+        lv_obj_align(eye_left_, LV_ALIGN_LEFT_MID, 2, 0);
+        lv_obj_align(eye_right_, LV_ALIGN_RIGHT_MID, -2, 0);
+    } else if (e == "sad" || e == "crying") {
+        // Mata kecil (sedih)
+        lv_obj_set_size(eye_left_, 10, 10);
+        lv_obj_set_size(eye_right_, 10, 10);
+    } else if (e == "surprised") {
+        // Mata besar bulat
+        lv_obj_set_size(eye_left_, 14, 14);
+        lv_obj_set_size(eye_right_, 14, 14);
+        lv_obj_set_style_radius(eye_left_, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_radius(eye_right_, LV_RADIUS_CIRCLE, 0);
+    } else if (e == "angry") {
+        // Mata sempit (fokus)
+        lv_obj_set_size(eye_left_, 12, 8);
+        lv_obj_set_size(eye_right_, 12, 8);
     } else {
-        lv_obj_set_style_text_font(emotion_label_, lvgl_theme->emoji_font()->font(), 0);
-        lv_label_set_text(emotion_label_, NOTO_EMOJI_NEUTRAL);
+        // Neutral — balik ke default
+        lv_obj_set_size(eye_left_, 12, 14);
+        lv_obj_set_size(eye_right_, 12, 14);
+        lv_obj_set_style_radius(eye_left_, 4, 0);
+        lv_obj_set_style_radius(eye_right_, 4, 0);
     }
 }
 
@@ -431,4 +475,46 @@ void OledDisplay::SetPowerSaveMode(bool on) {
         }
     }
     LvglDisplay::SetPowerSaveMode(on);
+}
+
+void OledDisplay::InitEyes() {
+    if (eye_timer_ != nullptr) return;
+    eye_timer_ = lv_timer_create([](lv_timer_t* t) {
+        OledDisplay* self = (OledDisplay*)lv_timer_get_user_data(t);
+        self->BlinkEyes();
+    }, 3000, this);
+}
+
+void OledDisplay::BlinkEyes() {
+    if (eye_left_ == nullptr || eye_right_ == nullptr) return;
+
+    DisplayLockGuard lock(this);
+
+    // Kedip = kecilin tinggi dari 14 → 2 → 14
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, eye_left_);
+    lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
+        lv_obj_set_height((lv_obj_t*)obj, val);
+    });
+    lv_anim_set_values(&a, 14, 2);
+    lv_anim_set_duration(&a, 100);
+    lv_anim_set_playback_duration(&a, 100);
+    lv_anim_set_repeat_count(&a, 1);
+    lv_anim_start(&a);
+
+    lv_anim_t a2;
+    lv_anim_init(&a2);
+    lv_anim_set_var(&a2, eye_right_);
+    lv_anim_set_exec_cb(&a2, [](void* obj, int32_t val) {
+        lv_obj_set_height((lv_obj_t*)obj, val);
+    });
+    lv_anim_set_values(&a2, 14, 2);
+    lv_anim_set_duration(&a2, 100);
+    lv_anim_set_playback_duration(&a2, 100);
+    lv_anim_set_repeat_count(&a2, 1);
+    lv_anim_start(&a2);
+
+    // Random interval 2-5 detik
+    lv_timer_set_period(eye_timer_, 2000 + (esp_random() % 3000));
 }
