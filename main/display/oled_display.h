@@ -21,6 +21,13 @@ private:
     lv_obj_t* emotion_label_ = nullptr;
     lv_obj_t* chat_message_label_ = nullptr;
 
+lv_obj_t* eye_left_ = nullptr;
+lv_obj_t* eye_right_ = nullptr;
+lv_timer_t* eye_timer_ = nullptr;
+
+void InitEyes();
+void BlinkEyes();
+
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
 
