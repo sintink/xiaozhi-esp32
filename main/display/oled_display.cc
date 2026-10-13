@@ -287,7 +287,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
 }
 
-void OledDisplay::SetupUI_128x32() {
+void OledDisplay::SetupUI_128x32() 
 
 
 void OledDisplay::SetEmotion(const char* emotion) {
