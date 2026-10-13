@@ -21,6 +21,7 @@
 #include <cJSON.h>
 #include <cstring>
 #include <limits>
+#include <esp_netif.h>
 
 #define TAG "Application"
 
@@ -1238,29 +1239,59 @@ void Application::CheckAndPlayPendingMusic() {
 }
 
 void Application::StopNotification() {
-    // Kirim perintah stop ke STB (kill yt-dlp + ffmpeg)
+    // ─── Kirim perintah stop ke STB (kill yt-dlp + ffmpeg) ───
     static bool stb_stop_sent = false;   // hindari spam
     if (!stb_stop_sent) {
         stb_stop_sent = true;
+
+        // ─── Auto-detect IP STB (mDNS → subnet fallback) ───
+        std::string stb_ip = ResolveHostname("armbian.local");
+        if (stb_ip.empty()) {
+            // Fallback: subnet-based
+            esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+            esp_netif_ip_info_t ip_info = {};
+            if (netif && esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+                char ip_str[16];
+                snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
+
+                int a, b, c, d;
+                if (sscanf(ip_str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4) {
+                    if (c == 2) {
+                        stb_ip = "192.168.2.200";  // Rumah
+                        ESP_LOGI(TAG, "Stop: Subnet 192.168.2.x → STB 192.168.2.200");
+                    } else {
+                        stb_ip = "192.168.1.199";  // Kerja
+                        ESP_LOGI(TAG, "Stop: Subnet 192.168.1.x → STB 192.168.1.199");
+                    }
+                }
+            }
+            if (stb_ip.empty()) {
+                stb_ip = "192.168.1.199";  // ultimate fallback
+                ESP_LOGW(TAG, "Stop: Fallback default 192.168.1.199");
+            }
+        } else {
+            ESP_LOGI(TAG, "Stop: STB via mDNS: %s", stb_ip.c_str());
+        }
+
+        // ─── Kirim HTTP stop ke STB ───
+        std::string stop_url = "http://" + stb_ip + "/api/musik-stop.php";
+
         auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
         if (http) {
-            //if (auto opened = http->Open("GET", "http://192.168.1.199/api/musik-stop.php"); opened) {
-               std::string stb_ip = ResolveHostname("armbian.local");
-if (stb_ip.empty()) stb_ip = "192.168.1.199";
-
-std::string stop_url = "http://" + stb_ip + "/api/musik-stop.php";
-if (auto opened = http->Open("GET", stop_url); opened) {
-            ESP_LOGI(TAG, "Kirim stop ke STB");
+            if (auto opened = http->Open("GET", stop_url); opened) {
+                ESP_LOGI(TAG, "Kirim stop ke STB: %s", stop_url.c_str());
             } else {
                 ESP_LOGW(TAG, "Gagal kirim stop ke STB");
             }
             http->Close();
         }
+
         // Reset flag setelah 1 detik biar bisa dipakai lagi
         vTaskDelay(pdMS_TO_TICKS(1000));
         stb_stop_sent = false;
     }
 
+    // ─── Stop playback lokal ───
     notify_player_.Stop();
     audio_service_.ResetDecoder();
     auto& board = Board::GetInstance();
