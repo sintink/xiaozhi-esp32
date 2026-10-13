@@ -43,6 +43,7 @@ set(SOURCES "audio/audio_codec.cc"
             "main.cc"
             "http_bridge.cc"
             "espnow_sender.cc"
+            "mdns_helper.cc"
             )
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
