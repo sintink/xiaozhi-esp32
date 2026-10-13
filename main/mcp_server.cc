@@ -13,6 +13,7 @@
 #include <optional>
 
 #include "http_bridge.h"
+#include "mdns_helper.h"
 #include "application.h"
 #include "board.h"
 #include "display.h"
@@ -145,36 +146,48 @@ AddTool("self.music.play",
             ESP_LOGI(TAG, "Play music request: %s", query.c_str());
 
             // ─── Step 1: Ambil judul dari STB (metadata) ───
-            std::string title = query;  // fallback
-            {
-                std::string info_url = "http://192.168.1.199/api/musik-info.php?q="
-                                       + UrlEncode(query);
-                auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
-                if (http && http->Open("GET", info_url)) {
-                    if (auto status = http->GetStatusCode(); status && *status == 200) {
-                        std::string resp = http->ReadAll();
-                        cJSON* root = cJSON_Parse(resp.c_str());
-                        if (root) {
-                            auto t = cJSON_GetObjectItem(root, "title");
-                            if (cJSON_IsString(t) && t->valuestring[0] != '\0') {
-                                title = t->valuestring;
-                            }
-                            cJSON_Delete(root);
-                        }
-                        ESP_LOGI(TAG, "Metadata title: %s", title.c_str());
-                    }
-                    http->Close();
-                } else if (http) {
-                    http->Close();
+std::string title = query;  // fallback
+{
+    // Resolve IP STB via mDNS
+    std::string stb_ip = ResolveHostname("armbian.local");
+    if (stb_ip.empty()) {
+        ESP_LOGE(TAG, "Gak bisa resolve armbian.local, pakai default IP");
+        stb_ip = "192.168.1.199";  // fallback
+    }
+    
+    std::string info_url = "http://" + stb_ip + "/api/musik-info.php?q="
+                           + UrlEncode(query);
+    
+    auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+    if (http && http->Open("GET", info_url)) {
+        if (auto status = http->GetStatusCode(); status && *status == 200) {
+            std::string resp = http->ReadAll();
+            cJSON* root = cJSON_Parse(resp.c_str());
+            if (root) {
+                auto t = cJSON_GetObjectItem(root, "title");
+                if (cJSON_IsString(t) && t->valuestring[0] != '\0') {
+                    title = t->valuestring;
                 }
+                cJSON_Delete(root);
             }
-
+            ESP_LOGI(TAG, "Metadata title: %s", title.c_str());
+        }
+        http->Close();
+    } else if (http) {
+        http->Close();
+    }
+}
             // ─── Step 2: Kirim judul ke WROOM biar tampil di P10 ───
-            HttpBridgeSend("SPEAKING", "Memutar: " + title);
+           // HttpBridgeSend("SPEAKING", "Memutar: " + title);
+            EspNowSend("SPEAKING", "Memutar: " + title);
 
             // ─── Step 3: Minta STB siapin stream Opus ───
-            std::string url = "http://192.168.1.199/api/set-musik.php?format=opus&q="
-                              + UrlEncode(query);
+            std::string stb_ip = ResolveHostname("armbian.local");
+                 if (stb_ip.empty()) {
+                  stb_ip = "192.168.1.199";  // fallback
+                  }
+                  std::string url = "http://" + stb_ip + "/api/set-musik.php?format=opus&q="
+                  + UrlEncode(query);
 
             auto http = Board::GetInstance().GetNetwork()->CreateHttp(5);
             if (auto opened = http->Open("GET", url); !opened) {
