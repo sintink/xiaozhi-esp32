@@ -148,7 +148,7 @@ bool OledDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 
 void OledDisplay::Unlock() { lvgl_port_unlock(); }
 
-
+void SetupUI_128x32();
 
 void OledDisplay::SetupUI_128x64() {
     DisplayLockGuard lock(this);
