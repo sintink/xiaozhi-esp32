@@ -349,6 +349,13 @@ void OledDisplay::InitEyes() {
     }, 50, this);   // update tiap 50ms
 }
 
+void OledDisplay::SetFaceState(int state) {
+    if (face_state_ != state) {
+        face_state_ = state;
+        next_look = 0;   // ← paksa trigger look langsung
+    }
+}
+
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
@@ -360,21 +367,35 @@ void OledDisplay::UpdateFace() {
 
     int ox = (int)current_look_x;
     int oy = (int)current_look_y;
-    if (ox < -3) ox = -3;
-    if (ox > 3) ox = 3;
+    if (ox < -5) ox = -5;
+    if (ox > 5) ox = 5;
     if (oy < -3) oy = -3;
     if (oy > 3) oy = 3;
 
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset + ox, -4 + oy);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset + ox, -4 + oy);
 
-    /* --- Trigger look baru tiap 3-7 detik --- */
+    /* --- Trigger look baru --- */
     static unsigned long last_look = 0;
     if (now - last_look > next_look) {
         last_look = now;
-        next_look = 3000 + (esp_random() % 4000);
-        target_look_x = (int)(esp_random() % 7) - 3;
-        target_look_y = (int)(esp_random() % 5) - 2;
+
+        if (face_state_ == 1) {
+            // Listening — fokus ke tengah
+            target_look_x = 0;
+            target_look_y = 0;
+            next_look = 2000;
+        } else if (face_state_ == 2) {
+            // Speaking — gerak ringan
+            next_look = 1000 + (esp_random() % 1500);
+            target_look_x = (int)(esp_random() % 5) - 2;
+            target_look_y = (int)(esp_random() % 3) - 1;
+        } else {
+            // Idle — lirik random
+            next_look = 2000 + (esp_random() % 3000);
+            target_look_x = (int)(esp_random() % 9) - 4;
+            target_look_y = (int)(esp_random() % 5) - 2;
+        }
     }
 
     /* --- Blink --- */
@@ -383,7 +404,14 @@ void OledDisplay::UpdateFace() {
         is_blinking = true;
         blink_start = now;
         last_blink = now;
-        next_blink = 3000 + (esp_random() % 4000);
+
+        if (face_state_ == 1) {
+            // Listening — jarang kedip
+            next_blink = 5000 + (esp_random() % 3000);
+        } else {
+            // Idle & Speaking — normal
+            next_blink = 2500 + (esp_random() % 2500);
+        }
     }
 
     if (is_blinking) {
