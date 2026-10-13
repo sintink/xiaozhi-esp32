@@ -13,6 +13,7 @@
 #include "text_glyph_payload.h"
 #include "websocket_protocol.h"
 #include "espnow_sender.h"
+#include "mdns_helper.h"
 
 #include <driver/gpio.h>
 #include <esp_log.h>
@@ -1243,8 +1244,13 @@ void Application::StopNotification() {
         stb_stop_sent = true;
         auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
         if (http) {
-            if (auto opened = http->Open("GET", "http://192.168.1.199/api/musik-stop.php"); opened) {
-                ESP_LOGI(TAG, "Kirim stop ke STB");
+            //if (auto opened = http->Open("GET", "http://192.168.1.199/api/musik-stop.php"); opened) {
+               std::string stb_ip = ResolveHostname("armbian.local");
+if (stb_ip.empty()) stb_ip = "192.168.1.199";
+
+std::string stop_url = "http://" + stb_ip + "/api/musik-stop.php";
+if (auto opened = http->Open("GET", stop_url); opened) {
+            ESP_LOGI(TAG, "Kirim stop ke STB");
             } else {
                 ESP_LOGW(TAG, "Gagal kirim stop ke STB");
             }
