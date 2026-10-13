@@ -23,6 +23,7 @@ private:
     lv_obj_t* right_eye_ = nullptr;
     lv_obj_t* mouth_ = nullptr;
     lv_timer_t* face_timer_ = nullptr;
+    lv_obj_t* subtitle_label_ = nullptr; 
 
     int eye_size = 18;
     int eye_offset = 30;
@@ -53,6 +54,7 @@ public:
 
     virtual void SetupUI() override;
     virtual void SetChatMessage(const char* role, const char* content) override;
+    virtual void ClearChatMessages() override; 
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetTheme(Theme* theme) override;
     virtual bool IsMonochrome() const override { return true; }
