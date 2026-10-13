@@ -44,6 +44,7 @@ private:
     virtual void Unlock() override;
 
     void SetupUI_128x64();
+    void SetupUI_128x32();
 
 public:
     OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width,
