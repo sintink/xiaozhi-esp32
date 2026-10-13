@@ -108,11 +108,11 @@ OledDisplay::~OledDisplay() {
         lv_obj_del(content_);
     }
 
-  if (eye_timer_ != nullptr) {
-    lv_timer_del(eye_timer_);
-    eye_timer_ = nullptr;
-}
-
+  if (face_timer_ != nullptr) {
+    lv_timer_del(face_timer_);
+    face_timer_ = nullptr;
+  }
+  
     bool is_128x64_layout = (top_bar_ != nullptr);
     if (status_bar_ != nullptr && is_128x64_layout) {
         status_label_ = nullptr;
@@ -152,28 +152,7 @@ bool OledDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 
 void OledDisplay::Unlock() { lvgl_port_unlock(); }
 
-void OledDisplay::SetChatMessage(const char* role, const char* content) {
-    DisplayLockGuard lock(this);
-    if (chat_message_label_ == nullptr) {
-        return;
-    }
 
-    // Replace all newlines with spaces
-    std::string content_str = content;
-    std::replace(content_str.begin(), content_str.end(), '\n', ' ');
-
-    lv_anim_delete(chat_message_label_, nullptr);
-    if (content_right_ == nullptr) {
-        lv_label_set_text(chat_message_label_, content_str.c_str());
-    } else {
-        if (content == nullptr || content[0] == '\0') {
-            lv_obj_add_flag(content_right_, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_label_set_text(chat_message_label_, content_str.c_str());
-            lv_obj_remove_flag(content_right_, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-}
 
 void OledDisplay::SetupUI_128x64() {
     DisplayLockGuard lock(this);
@@ -186,7 +165,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_text_font(screen, text_font, 0);
     lv_obj_set_style_text_color(screen, lv_color_black(), 0);
 
-    /* Container */
+    /* Container utama */
     container_ = lv_obj_create(screen);
     lv_obj_set_size(container_, LV_HOR_RES, LV_VER_RES);
     lv_obj_set_flex_flow(container_, LV_FLEX_FLOW_COLUMN);
@@ -194,7 +173,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_set_style_pad_row(container_, 0, 0);
 
-    /* Layer 1: Top bar - for status icons */
+    /* Top bar */
     top_bar_ = lv_obj_create(container_);
     lv_obj_set_size(top_bar_, LV_HOR_RES, 16);
     lv_obj_set_style_radius(top_bar_, 0, 0);
@@ -227,16 +206,16 @@ void OledDisplay::SetupUI_128x64() {
     lv_label_set_text(battery_label_, "");
     lv_obj_set_style_text_font(battery_label_, icon_font, 0);
 
-    /* Layer 2: Status bar - for center text labels */
+    /* Status bar (overlay) */
     status_bar_ = lv_obj_create(screen);
     lv_obj_set_size(status_bar_, LV_HOR_RES, 16);
     lv_obj_set_style_radius(status_bar_, 0, 0);
-    lv_obj_set_style_bg_opa(status_bar_, LV_OPA_TRANSP, 0);  // Transparent background
+    lv_obj_set_style_bg_opa(status_bar_, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(status_bar_, 0, 0);
     lv_obj_set_style_pad_all(status_bar_, 0, 0);
     lv_obj_set_scrollbar_mode(status_bar_, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_set_style_layout(status_bar_, LV_LAYOUT_NONE, 0);  // Use absolute positioning
-    lv_obj_align(status_bar_, LV_ALIGN_TOP_MID, 0, 0);        // Overlap with top_bar_
+    lv_obj_set_style_layout(status_bar_, LV_LAYOUT_NONE, 0);
+    lv_obj_align(status_bar_, LV_ALIGN_TOP_MID, 0, 0);
 
     notification_label_ = lv_label_create(status_bar_);
     lv_obj_set_width(notification_label_, LV_HOR_RES);
@@ -252,77 +231,53 @@ void OledDisplay::SetupUI_128x64() {
     lv_label_set_text(status_label_, Lang::Strings::INITIALIZING);
     lv_obj_align(status_label_, LV_ALIGN_CENTER, 0, 0);
 
-    /* Content */
+    /* Content (tempat wajah) */
     content_ = lv_obj_create(container_);
     lv_obj_set_scrollbar_mode(content_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_style_radius(content_, 0, 0);
     lv_obj_set_style_pad_all(content_, 0, 0);
-    lv_obj_set_width(content_, LV_HOR_RES);
+    lv_obj_set_style_border_width(content_, 0, 0);
+    lv_obj_set_size(content_, LV_HOR_RES, 48);
     lv_obj_set_flex_grow(content_, 1);
-    lv_obj_set_flex_flow(content_, LV_FLEX_FLOW_COLUMN);
-lv_obj_set_style_flex_main_place(content_, LV_FLEX_ALIGN_CENTER, 0);
-lv_obj_set_style_flex_cross_place(content_, LV_FLEX_ALIGN_CENTER, 0);
-  
-    // Wadah mata (full width, 32px tinggi)
-content_left_ = lv_obj_create(content_);
-lv_obj_set_size(content_left_, LV_HOR_RES, 32);
-lv_obj_set_style_pad_all(content_left_, 0, 0);
-lv_obj_set_style_border_width(content_left_, 0, 0);
-lv_obj_set_style_bg_opa(content_left_, LV_OPA_TRANSP, 0);
 
-// Container mata
-lv_obj_t* eyes_box = lv_obj_create(content_left_);
-lv_obj_set_size(eyes_box, 84, 28);
-lv_obj_set_style_bg_opa(eyes_box, LV_OPA_TRANSP, 0);
-lv_obj_set_style_border_width(eyes_box, 0, 0);
-lv_obj_set_style_pad_all(eyes_box, 0, 0);
-lv_obj_set_flex_flow(eyes_box, LV_FLEX_FLOW_ROW);
-lv_obj_set_style_flex_main_place(eyes_box, LV_FLEX_ALIGN_CENTER, 0);
-lv_obj_set_style_flex_cross_place(eyes_box, LV_FLEX_ALIGN_CENTER, 0);
-lv_obj_set_style_pad_column(eyes_box, 20, 0);
-lv_obj_center(eyes_box);
+    /* Face container */
+    face_container_ = lv_obj_create(content_);
+    lv_obj_set_size(face_container_, LV_HOR_RES, 48);
+    lv_obj_set_style_border_width(face_container_, 0, 0);
+    lv_obj_set_style_bg_opa(face_container_, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_pad_all(face_container_, 0, 0);
+    lv_obj_center(face_container_);
 
-// Mata kiri
-eye_left_ = lv_obj_create(eyes_box);
-lv_obj_set_size(eye_left_, 22, 26);
-lv_obj_set_style_radius(eye_left_, 8, 0);
-lv_obj_set_style_bg_color(eye_left_, lv_color_black(), 0);
-lv_obj_set_style_bg_opa(eye_left_, LV_OPA_COVER, 0);
-lv_obj_set_style_border_width(eye_left_, 0, 0);
+    /* Mata kiri */
+    left_eye_ = lv_obj_create(face_container_);
+    lv_obj_set_style_bg_color(left_eye_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(left_eye_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(left_eye_, 0, 0);
+    lv_obj_set_style_radius(left_eye_, 2, 0);
+    lv_obj_set_size(left_eye_, eye_size, eye_size);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset, -4);
 
-// Mata kanan
-eye_right_ = lv_obj_create(eyes_box);
-lv_obj_set_size(eye_right_, 22, 26);
-lv_obj_set_style_radius(eye_right_, 8, 0);
-lv_obj_set_style_bg_color(eye_right_, lv_color_black(), 0);
-lv_obj_set_style_bg_opa(eye_right_, LV_OPA_COVER, 0);
-lv_obj_set_style_border_width(eye_right_, 0, 0);
+    /* Mata kanan */
+    right_eye_ = lv_obj_create(face_container_);
+    lv_obj_set_style_bg_color(right_eye_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(right_eye_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(right_eye_, 0, 0);
+    lv_obj_set_style_radius(right_eye_, 2, 0);
+    lv_obj_set_size(right_eye_, eye_size, eye_size);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset, -4);
 
-InitEyes();
-  
-    content_right_ = lv_obj_create(content_);
-lv_obj_set_size(content_right_, LV_HOR_RES, 16);
-lv_obj_set_style_pad_all(content_right_, 0, 0);
-lv_obj_set_style_border_width(content_right_, 0, 0);
-lv_obj_set_style_bg_opa(content_right_, LV_OPA_TRANSP, 0);
-lv_obj_add_flag(content_right_, LV_OBJ_FLAG_HIDDEN);
+    /* Mulut (opsional, kecil di bawah) */
+    mouth_ = lv_obj_create(face_container_);
+    lv_obj_set_style_bg_color(mouth_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(mouth_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(mouth_, 0, 0);
+    lv_obj_set_style_radius(mouth_, 3, 0);
+    lv_obj_set_size(mouth_, 20, 4);
+    lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16);
 
-chat_message_label_ = lv_label_create(content_right_);
-lv_label_set_text(chat_message_label_, "");
-lv_label_set_long_mode(chat_message_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
-lv_obj_set_style_text_align(chat_message_label_, LV_TEXT_ALIGN_CENTER, 0);
-lv_obj_set_width(chat_message_label_, LV_HOR_RES - 4);
-lv_obj_center(chat_message_label_);
+    InitEyes();
 
-// Start scrolling subtitle after a delay
-static lv_anim_t a;
-lv_anim_init(&a);
-lv_anim_set_delay(&a, 1000);
-lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-lv_obj_set_style_anim(chat_message_label_, &a, LV_PART_MAIN);
-lv_obj_set_style_anim_duration(chat_message_label_, lv_anim_speed_clamped(60, 300, 60000),
-                               LV_PART_MAIN);
-
+    /* Low battery popup */
     low_battery_popup_ = lv_obj_create(screen);
     lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_size(low_battery_popup_, LV_HOR_RES * 0.9, text_font->line_height * 2);
@@ -425,30 +380,30 @@ void OledDisplay::SetupUI_128x32() {
 }
 
 void OledDisplay::SetEmotion(const char* emotion) {
-    if (emotion == nullptr || eye_left_ == nullptr) return;
+    if (emotion == nullptr || left_eye_ == nullptr) return;
 
     DisplayLockGuard lock(this);
     std::string e(emotion);
 
     if (e == "happy" || e == "laughing") {
-        lv_obj_set_size(eye_left_, 22, 12);
-        lv_obj_set_size(eye_right_, 22, 12);
+        lv_obj_set_size(left_eye_, eye_size + 4, eye_size - 6);
+        lv_obj_set_size(right_eye_, eye_size + 4, eye_size - 6);
     } else if (e == "sad" || e == "crying") {
-        lv_obj_set_size(eye_left_, 18, 18);
-        lv_obj_set_size(eye_right_, 18, 18);
+        lv_obj_set_size(left_eye_, eye_size - 2, eye_size - 4);
+        lv_obj_set_size(right_eye_, eye_size - 2, eye_size - 4);
+        lv_obj_set_style_radius(left_eye_, 6, 0);
+        lv_obj_set_style_radius(right_eye_, 6, 0);
     } else if (e == "surprised") {
-        lv_obj_set_size(eye_left_, 26, 26);
-        lv_obj_set_size(eye_right_, 26, 26);
-        lv_obj_set_style_radius(eye_left_, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_radius(eye_right_, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_size(left_eye_, eye_size + 6, eye_size + 6);
+        lv_obj_set_size(right_eye_, eye_size + 6, eye_size + 6);
     } else if (e == "angry") {
-        lv_obj_set_size(eye_left_, 22, 16);
-        lv_obj_set_size(eye_right_, 22, 16);
+        lv_obj_set_size(left_eye_, eye_size + 2, eye_size - 4);
+        lv_obj_set_size(right_eye_, eye_size + 2, eye_size - 4);
     } else {
-        lv_obj_set_size(eye_left_, 22, 26);
-        lv_obj_set_size(eye_right_, 22, 26);
-        lv_obj_set_style_radius(eye_left_, 8, 0);
-        lv_obj_set_style_radius(eye_right_, 8, 0);
+        lv_obj_set_size(left_eye_, eye_size, eye_size);
+        lv_obj_set_size(right_eye_, eye_size, eye_size);
+        lv_obj_set_style_radius(left_eye_, 2, 0);
+        lv_obj_set_style_radius(right_eye_, 2, 0);
     }
 }
 
@@ -473,22 +428,60 @@ void OledDisplay::SetPowerSaveMode(bool on) {
 }
 
 void OledDisplay::InitEyes() {
-    if (eye_timer_ != nullptr) return;
-    eye_timer_ = lv_timer_create([](lv_timer_t* t) {
+    if (face_timer_ != nullptr) return;
+    face_timer_ = lv_timer_create([](lv_timer_t* t) {
         OledDisplay* self = (OledDisplay*)lv_timer_get_user_data(t);
-        self->LookAround();    // ← cuma gerakin pupil, tinggi mata tetap
-    }, 2500, this);
+        self->UpdateFace();
+    }, 50, this);   // update tiap 50ms
 }
 
-void OledDisplay::LookAround() {
-    if (eye_left_ == nullptr || eye_right_ == nullptr) return;
+void OledDisplay::UpdateFace() {
+    if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
-    // Geser kedua mata bareng, -4..+4 pixel
-    int x = (int)(esp_random() % 9) - 4;
-    int y = (int)(esp_random() % 5) - 2;
+    unsigned long now = millis();
 
-    lv_obj_set_style_translate_x(eye_left_, x, 0);
-    lv_obj_set_style_translate_y(eye_left_, y, 0);
-    lv_obj_set_style_translate_x(eye_right_, x, 0);
-    lv_obj_set_style_translate_y(eye_right_, y, 0);
+    /* --- Smooth lerp gerakan mata --- */
+    current_look_x += (target_look_x - current_look_x) * 0.15f;
+    current_look_y += (target_look_y - current_look_y) * 0.15f;
+
+    int ox = (int)current_look_x;
+    int oy = (int)current_look_y;
+    if (ox < -3) ox = -3; if (ox > 3) ox = 3;
+    if (oy < -3) oy = -3; if (oy > 3) oy = 3;
+
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset + ox, -4 + oy);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset + ox, -4 + oy);
+
+    /* --- Trigger look baru tiap 3-7 detik --- */
+    static unsigned long last_look = 0;
+    if (now - last_look > next_look) {
+        last_look = now;
+        next_look = 3000 + (esp_random() % 4000);
+        target_look_x = (int)(esp_random() % 7) - 3;
+        target_look_y = (int)(esp_random() % 5) - 2;
+    }
+
+    /* --- Blink --- */
+    static unsigned long last_blink = 0;
+    if (!is_blinking && now - last_blink > next_blink) {
+        is_blinking = true;
+        blink_start = now;
+        last_blink = now;
+        next_blink = 3000 + (esp_random() % 4000);
+    }
+
+    if (is_blinking) {
+        unsigned long elapsed = now - blink_start;
+        int h = eye_size;
+        if (elapsed < 80) {
+            h = eye_size - (elapsed * (eye_size - 2) / 80);
+        } else if (elapsed < 160) {
+            h = 2 + ((elapsed - 80) * (eye_size - 2) / 80);
+        } else {
+            is_blinking = false;
+            h = eye_size;
+        }
+        lv_obj_set_height(left_eye_, h);
+        lv_obj_set_height(right_eye_, h);
+    }
 }
