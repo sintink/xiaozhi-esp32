@@ -28,6 +28,7 @@ private:
     int eye_offset = 30;
     float current_look_x = 0;
     float current_look_y = 0;
+    int face_state_ = 0;   // 0=idle, 1=listening,
     int target_look_x = 0;
     int target_look_y = 0;
     bool is_blinking = false;
@@ -56,6 +57,7 @@ public:
     virtual void SetTheme(Theme* theme) override;
     virtual bool IsMonochrome() const override { return true; }
     void SetPowerSaveMode(bool on) override;
+    void SetFaceState(int state) override;
 };
 
 #endif  // OLED_DISPLAY_H
