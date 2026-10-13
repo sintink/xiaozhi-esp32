@@ -89,7 +89,20 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
 }
 
 void OledDisplay::SetChatMessage(const char* role, const char* content) {
-    // no-op
+    if (content == nullptr || subtitle_label_ == nullptr) return;
+    DisplayLockGuard lock(this);
+
+    std::string prefix;
+    if (strcmp(role, "user") == 0) {
+        prefix = ">> ";
+    } else if (strcmp(role, "assistant") == 0) {
+        prefix = "<< ";
+    } else {
+        prefix = "";
+    }
+
+    std::string text = prefix + std::string(content);
+    lv_label_set_text(subtitle_label_, text.c_str());
 }
 
 void OledDisplay::SetupUI() {
@@ -276,6 +289,15 @@ void OledDisplay::SetupUI_128x64() {
 
     InitEyes();
 
+    /* Subtitle label (overlay di content_, hidden default) */
+subtitle_label_ = lv_label_create(content_);
+lv_obj_set_width(subtitle_label_, LV_HOR_RES - 4);
+lv_label_set_long_mode(subtitle_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
+lv_obj_set_style_text_align(subtitle_label_, LV_TEXT_ALIGN_CENTER, 0);
+lv_label_set_text(subtitle_label_, "");
+lv_obj_align(subtitle_label_, LV_ALIGN_CENTER, 0, 0);
+lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
+
     /* Low battery popup */
     low_battery_popup_ = lv_obj_create(screen);
     lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
@@ -349,10 +371,32 @@ void OledDisplay::InitEyes() {
     }, 50, this);   // update tiap 50ms
 }
 
+void OledDisplay::ClearChatMessages() {
+    if (subtitle_label_ == nullptr) return;
+    DisplayLockGuard lock(this);
+    lv_label_set_text(subtitle_label_, "");
+    lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
+}
+
 void OledDisplay::SetFaceState(int state) {
+    DisplayLockGuard lock(this);
+
     if (face_state_ != state) {
         face_state_ = state;
-        next_look = 0;   // ← paksa trigger look langsung
+        next_look = 0;
+    }
+
+    if (state == 0) {
+        // Idle → mata full, subtitle hidden
+        if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
+        if (subtitle_label_) {
+            lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
+            lv_label_set_text(subtitle_label_, "");
+        }
+    } else {
+        // Listening/Speaking → mata hidden, subtitle tampil
+        if (face_container_) lv_obj_add_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
+        if (subtitle_label_) lv_obj_clear_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
