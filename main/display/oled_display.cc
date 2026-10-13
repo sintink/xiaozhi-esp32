@@ -476,40 +476,20 @@ void OledDisplay::InitEyes() {
     if (eye_timer_ != nullptr) return;
     eye_timer_ = lv_timer_create([](lv_timer_t* t) {
         OledDisplay* self = (OledDisplay*)lv_timer_get_user_data(t);
-        self->BlinkEyes();
-    }, 3000, this);
+        self->LookAround();    // ← cuma gerakin pupil, tinggi mata tetap
+    }, 2500, this);
 }
 
-void OledDisplay::BlinkEyes() {
-    if (eye_left_ == nullptr || eye_right_ == nullptr) return;
+void OledDisplay::LookAround() {
+    if (pupil_left_ == nullptr || pupil_right_ == nullptr) return;
 
     DisplayLockGuard lock(this);
 
-    // Kedip = kecilin tinggi dari 14 → 2 → 14
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, eye_left_);
-    lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
-        lv_obj_set_height((lv_obj_t*)obj, val);
-    });
-    lv_anim_set_values(&a, 14, 3);
-    lv_anim_set_duration(&a, 100);
-    lv_anim_set_playback_duration(&a, 100);
-    lv_anim_set_repeat_count(&a, 1);
-    lv_anim_start(&a);
+    // Gerakin pupil random — tinggi mata TETAP
+    int x = (int)(esp_random() % 11) - 5;
+    int y = (int)(esp_random() % 9) - 4;
 
-    lv_anim_t a2;
-    lv_anim_init(&a2);
-    lv_anim_set_var(&a2, eye_right_);
-    lv_anim_set_exec_cb(&a2, [](void* obj, int32_t val) {
-        lv_obj_set_height((lv_obj_t*)obj, val);
-    });
-    lv_anim_set_values(&a2, 14, 3);
-    lv_anim_set_duration(&a2, 100);
-    lv_anim_set_playback_duration(&a2, 100);
-    lv_anim_set_repeat_count(&a2, 1);
-    lv_anim_start(&a2);
-
-    // Random interval 2-5 detik
-    lv_timer_set_period(eye_timer_, 2000 + (esp_random() % 3000));
+    lv_obj_align(pupil_left_, LV_ALIGN_CENTER, x, y);
+    lv_obj_align(pupil_right_, LV_ALIGN_CENTER, x, y);
 }
+
