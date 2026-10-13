@@ -438,7 +438,7 @@ void OledDisplay::InitEyes() {
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
-    unsigned long now = millis();
+    unsigned long now = esp_timer_get_time() / 1000;
 
     /* --- Smooth lerp gerakan mata --- */
     current_look_x += (target_look_x - current_look_x) * 0.15f;
@@ -446,8 +446,10 @@ void OledDisplay::UpdateFace() {
 
     int ox = (int)current_look_x;
     int oy = (int)current_look_y;
-    if (ox < -3) ox = -3; if (ox > 3) ox = 3;
-    if (oy < -3) oy = -3; if (oy > 3) oy = 3;
+    if (ox < -3) ox = -3;
+    if (ox > 3) ox = 3;
+    if (oy < -3) oy = -3;
+    if (oy > 3) oy = 3;
 
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset + ox, -4 + oy);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset + ox, -4 + oy);
