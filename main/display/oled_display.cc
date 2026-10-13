@@ -88,6 +88,10 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     // to ensure lvgl objects are created after the display is fully initialized.
 }
 
+void OledDisplay::SetChatMessage(const char* role, const char* content) {
+    // no-op
+}
+
 void OledDisplay::SetupUI() {
     // Prevent duplicate calls - if already called, return early
     if (setup_ui_called_) {
