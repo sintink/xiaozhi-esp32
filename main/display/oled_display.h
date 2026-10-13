@@ -26,7 +26,7 @@ lv_obj_t* eye_right_ = nullptr;
 lv_timer_t* eye_timer_ = nullptr;
 
 void InitEyes();
-void BlinkEyes();
+void LookAround();
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
