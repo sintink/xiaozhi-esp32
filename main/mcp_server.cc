@@ -14,6 +14,7 @@
 
 #include "http_bridge.h"
 #include "mdns_helper.h"
+#include "espnow_sender.h"
 #include "application.h"
 #include "board.h"
 #include "display.h"
