@@ -175,7 +175,7 @@ void OledDisplay::SetupUI_128x64() {
 
     /* Top bar */
     top_bar_ = lv_obj_create(container_);
-    lv_obj_set_size(top_bar_, LV_HOR_RES, 16);
+    lv_obj_set_size(top_bar_, LV_HOR_RES, 12);
     lv_obj_set_style_radius(top_bar_, 0, 0);
     lv_obj_set_style_bg_opa(top_bar_, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(top_bar_, 0, 0);
