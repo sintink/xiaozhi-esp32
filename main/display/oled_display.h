@@ -23,8 +23,6 @@ private:
 
 lv_obj_t* eye_left_ = nullptr;
 lv_obj_t* eye_right_ = nullptr;
-lv_obj_t* pupil_left_ = nullptr;      // ← TAMBAH
-lv_obj_t* pupil_right_ = nullptr;     // ← TAMBAH
 lv_timer_t* eye_timer_ = nullptr;
 
 void InitEyes();
