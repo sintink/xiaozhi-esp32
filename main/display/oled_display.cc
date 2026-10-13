@@ -500,7 +500,6 @@ void OledDisplay::InitEyes() {
 void OledDisplay::LookAround() {
     if (pupil_left_ == nullptr || pupil_right_ == nullptr) return;
 
-    DisplayLockGuard lock(this);
 
     // Gerakin pupil random — tinggi mata TETAP
     int x = (int)(esp_random() % 11) - 5;
