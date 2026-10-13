@@ -298,6 +298,23 @@ lv_obj_set_style_bg_color(eye_right_, lv_color_black(), 0);
 lv_obj_set_style_bg_opa(eye_right_, LV_OPA_COVER, 0);
 lv_obj_set_style_border_width(eye_right_, 0, 0);
 
+// Setelah kedua mata dibuat, TAMBAH INI:
+pupil_left_ = lv_obj_create(eye_left_);
+lv_obj_set_size(pupil_left_, 10, 10);
+lv_obj_set_style_radius(pupil_left_, LV_RADIUS_CIRCLE, 0);
+lv_obj_set_style_bg_color(pupil_left_, lv_color_white(), 0);
+lv_obj_set_style_bg_opa(pupil_left_, LV_OPA_COVER, 0);
+lv_obj_set_style_border_width(pupil_left_, 0, 0);
+lv_obj_align(pupil_left_, LV_ALIGN_CENTER, 0, 0);
+
+pupil_right_ = lv_obj_create(eye_right_);
+lv_obj_set_size(pupil_right_, 10, 10);
+lv_obj_set_style_radius(pupil_right_, LV_RADIUS_CIRCLE, 0);
+lv_obj_set_style_bg_color(pupil_right_, lv_color_white(), 0);
+lv_obj_set_style_bg_opa(pupil_right_, LV_OPA_COVER, 0);
+lv_obj_set_style_border_width(pupil_right_, 0, 0);
+lv_obj_align(pupil_right_, LV_ALIGN_CENTER, 0, 0);
+
 InitEyes();
   
     content_right_ = lv_obj_create(content_);
