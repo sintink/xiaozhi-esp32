@@ -23,10 +23,12 @@ private:
 
 lv_obj_t* eye_left_ = nullptr;
 lv_obj_t* eye_right_ = nullptr;
+lv_obj_t* pupil_left_ = nullptr;      // ← TAMBAH
+lv_obj_t* pupil_right_ = nullptr;     // ← TAMBAH
 lv_timer_t* eye_timer_ = nullptr;
 
 void InitEyes();
-void LookAround();
+void LookAround();                     // ← GANTI dari BlinkEyes
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
