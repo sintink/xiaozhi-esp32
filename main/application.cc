@@ -12,6 +12,7 @@
 #include "system_info.h"
 #include "text_glyph_payload.h"
 #include "websocket_protocol.h"
+#include "espnow_sender.h"
 
 #include <driver/gpio.h>
 #include <esp_log.h>
