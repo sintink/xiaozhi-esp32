@@ -28,7 +28,7 @@ lv_obj_t* pupil_right_ = nullptr;     // ← TAMBAH
 lv_timer_t* eye_timer_ = nullptr;
 
 void InitEyes();
-void LookAround();                     // ← GANTI dari BlinkEyes
+void LookAround();           
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
