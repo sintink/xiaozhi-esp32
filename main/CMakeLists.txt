@@ -1134,7 +1134,6 @@ idf_component_register(SRCS ${SOURCES}
                         fatfs
                         xiaozhi-fonts
                         esp_http_client
-                        mdns
                         ${MAIN_PRIV_REQUIRES_EXTRA}
                     )
 
