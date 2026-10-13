@@ -304,6 +304,7 @@ void Application::Run() {
 
 void Application::HandleNetworkConnectedEvent() {
     ESP_LOGI(TAG, "Network connected");
+    EspNowInit();
     auto state = GetDeviceState();
 
     if (state == kDeviceStateStarting || state == kDeviceStateWifiConfiguring) {
@@ -673,7 +674,8 @@ void Application::InitializeProtocol() {
         ESP_LOGI(TAG, "<< %s", clean_text.c_str());
         {
             std::string msg_copy = clean_text;
-            HttpBridgeSend("SPEAKING", msg_copy);
+           // HttpBridgeSend("SPEAKING", msg_copy);
+            EspNowSend("SPEAKING", msg_copy);
         }
         Schedule([display, message = clean_text,
                   glyphs = std::move(glyphs), bpp]() {
@@ -693,7 +695,8 @@ void Application::InitializeProtocol() {
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
 {
     std::string msg_copy = std::string(text->valuestring);
-    HttpBridgeSend("LISTENING", msg_copy);
+    //HttpBridgeSend("LISTENING", msg_copy);
+    EspNowSend("LISTENING", msg_copy);
 }
 Schedule([display, message = std::string(text->valuestring),
           glyphs = std::move(glyphs), bpp]() {
