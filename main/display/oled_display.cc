@@ -96,9 +96,8 @@ void OledDisplay::SetupUI() {
     }
 
     Display::SetupUI();  // Mark SetupUI as called
-    if (height_ == 64) {
-        SetupUI_128x64();
-    } 
+    SetupUI_128x64();
+}
 
 OledDisplay::~OledDisplay() {
     if (content_ != nullptr) {
