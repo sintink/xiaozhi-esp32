@@ -10,11 +10,13 @@
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <esp_netif.h>
 #include <optional>
 
 #include "http_bridge.h"
 #include "mdns_helper.h"
 #include "espnow_sender.h"
+#include "stb_ip_helper.h"
 #include "application.h"
 #include "board.h"
 #include "display.h"
@@ -43,6 +45,47 @@ static std::string UrlEncode(const std::string& s) {
 McpServer::McpServer() {}
 
 McpServer::~McpServer() = default;
+
+// Helper: deteksi IP STB berdasarkan subnet Xiaozhi
+static std::string GetStbIpAuto() {
+    // Coba mDNS dulu (kalau jalan)
+    std::string ip = ResolveHostname("armbian.local");
+    if (!ip.empty()) {
+        ESP_LOGI("MCP", "STB via mDNS: %s", ip.c_str());
+        return ip;
+    }
+
+    // Fallback: subnet-based
+    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif == nullptr) {
+        ESP_LOGW("MCP", "Netif STA gak ada, fallback 192.168.1.199");
+        return "192.168.1.199";
+    }
+
+    esp_netif_ip_info_t ip_info = {};
+    if (esp_netif_get_ip_info(netif, &ip_info) != ESP_OK) {
+        ESP_LOGW("MCP", "Gagal baca IP, fallback 192.168.1.199");
+        return "192.168.1.199";
+    }
+
+    char ip_str[16];
+    snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
+
+    int a, b, c, d;
+    if (sscanf(ip_str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4) {
+        if (c == 1) {
+            ESP_LOGI("MCP", "Subnet 192.168.1.x → STB 192.168.1.199");
+            return "192.168.1.199";  // Kerja
+        }
+        if (c == 2) {
+            ESP_LOGI("MCP", "Subnet 192.168.2.x → STB 192.168.2.200");
+            return "192.168.2.200";  // Rumah
+        }
+    }
+
+    ESP_LOGW("MCP", "Subnet gak dikenal (%s), fallback 192.168.1.199", ip_str);
+    return "192.168.1.199";
+}
 
 void McpServer::AddCommonTools() {
     // *Important* To speed up the response time, we add the common tools to the beginning of
@@ -146,51 +189,44 @@ AddTool("self.music.play",
             auto query = properties["query"].value<std::string>();
             ESP_LOGI(TAG, "Play music request: %s", query.c_str());
 
+            // ─── Dapatkan IP STB (auto-detect) ───
+            std::string stb_ip = GetStbIpAuto();
+            ESP_LOGI(TAG, "STB IP: %s", stb_ip.c_str());
+
             // ─── Step 1: Ambil judul dari STB (metadata) ───
-std::string title = query;  // fallback
-{
-    // Resolve IP STB via mDNS
-    std::string stb_ip = ResolveHostname("armbian.local");
-    if (stb_ip.empty()) {
-        ESP_LOGE(TAG, "Gak bisa resolve armbian.local, pakai default IP");
-        stb_ip = "192.168.1.199";  // fallback
-    }
-    
-    std::string info_url = "http://" + stb_ip + "/api/musik-info.php?q="
-                           + UrlEncode(query);
-    
-    auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
-    if (http && http->Open("GET", info_url)) {
-        if (auto status = http->GetStatusCode(); status && *status == 200) {
-            std::string resp = http->ReadAll();
-            cJSON* root = cJSON_Parse(resp.c_str());
-            if (root) {
-                auto t = cJSON_GetObjectItem(root, "title");
-                if (cJSON_IsString(t) && t->valuestring[0] != '\0') {
-                    title = t->valuestring;
+            std::string title = query;  // fallback
+            {
+                std::string info_url = "http://" + stb_ip + "/api/musik-info.php?q="
+                                       + UrlEncode(query);
+
+                auto http = Board::GetInstance().GetNetwork()->CreateHttp(15);
+                if (http && http->Open("GET", info_url)) {
+                    if (auto status = http->GetStatusCode(); status && *status == 200) {
+                        std::string resp = http->ReadAll();
+                        cJSON* root = cJSON_Parse(resp.c_str());
+                        if (root) {
+                            auto t = cJSON_GetObjectItem(root, "title");
+                            if (cJSON_IsString(t) && t->valuestring[0] != '\0') {
+                                title = t->valuestring;
+                            }
+                            cJSON_Delete(root);
+                        }
+                        ESP_LOGI(TAG, "Metadata title: %s", title.c_str());
+                    }
+                    http->Close();
+                } else if (http) {
+                    http->Close();
                 }
-                cJSON_Delete(root);
             }
-            ESP_LOGI(TAG, "Metadata title: %s", title.c_str());
-        }
-        http->Close();
-    } else if (http) {
-        http->Close();
-    }
-}
-            // ─── Step 2: Kirim judul ke WROOM biar tampil di P10 ───
-           // HttpBridgeSend("SPEAKING", "Memutar: " + title);
+
+            // ─── Step 2: Kirim judul ke WROOM via ESP-NOW ───
             EspNowSend("SPEAKING", "Memutar: " + title);
 
             // ─── Step 3: Minta STB siapin stream Opus ───
-            std::string stb_ip = ResolveHostname("armbian.local");
-                 if (stb_ip.empty()) {
-                  stb_ip = "192.168.1.199";  // fallback
-                  }
-                  std::string url = "http://" + stb_ip + "/api/set-musik.php?format=opus&q="
-                  + UrlEncode(query);
+            std::string url = "http://" + stb_ip + "/api/set-musik.php?format=opus&q="
+                              + UrlEncode(query);
 
-            auto http = Board::GetInstance().GetNetwork()->CreateHttp(5);
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
             if (auto opened = http->Open("GET", url); !opened) {
                 ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
                 return false;
