@@ -298,23 +298,6 @@ lv_obj_set_style_bg_color(eye_right_, lv_color_black(), 0);
 lv_obj_set_style_bg_opa(eye_right_, LV_OPA_COVER, 0);
 lv_obj_set_style_border_width(eye_right_, 0, 0);
 
-// Setelah kedua mata dibuat, TAMBAH INI:
-pupil_left_ = lv_obj_create(eye_left_);
-lv_obj_set_size(pupil_left_, 10, 10);
-lv_obj_set_style_radius(pupil_left_, LV_RADIUS_CIRCLE, 0);
-lv_obj_set_style_bg_color(pupil_left_, lv_color_white(), 0);
-lv_obj_set_style_bg_opa(pupil_left_, LV_OPA_COVER, 0);
-lv_obj_set_style_border_width(pupil_left_, 0, 0);
-lv_obj_align(pupil_left_, LV_ALIGN_CENTER, 0, 0);
-
-pupil_right_ = lv_obj_create(eye_right_);
-lv_obj_set_size(pupil_right_, 10, 10);
-lv_obj_set_style_radius(pupil_right_, LV_RADIUS_CIRCLE, 0);
-lv_obj_set_style_bg_color(pupil_right_, lv_color_white(), 0);
-lv_obj_set_style_bg_opa(pupil_right_, LV_OPA_COVER, 0);
-lv_obj_set_style_border_width(pupil_right_, 0, 0);
-lv_obj_align(pupil_right_, LV_ALIGN_CENTER, 0, 0);
-
 InitEyes();
   
     content_right_ = lv_obj_create(content_);
@@ -498,14 +481,14 @@ void OledDisplay::InitEyes() {
 }
 
 void OledDisplay::LookAround() {
-    if (pupil_left_ == nullptr || pupil_right_ == nullptr) return;
+    if (eye_left_ == nullptr || eye_right_ == nullptr) return;
 
+    // Geser kedua mata bareng, -4..+4 pixel
+    int x = (int)(esp_random() % 9) - 4;
+    int y = (int)(esp_random() % 5) - 2;
 
-    // Gerakin pupil random — tinggi mata TETAP
-    int x = (int)(esp_random() % 11) - 5;
-    int y = (int)(esp_random() % 9) - 4;
-
-    lv_obj_align(pupil_left_, LV_ALIGN_CENTER, x, y);
-    lv_obj_align(pupil_right_, LV_ALIGN_CENTER, x, y);
+    lv_obj_set_style_translate_x(eye_left_, x, 0);
+    lv_obj_set_style_translate_y(eye_left_, y, 0);
+    lv_obj_set_style_translate_x(eye_right_, x, 0);
+    lv_obj_set_style_translate_y(eye_right_, y, 0);
 }
-
