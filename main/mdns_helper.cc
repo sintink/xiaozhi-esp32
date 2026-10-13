@@ -1,8 +1,6 @@
 #include "mdns_helper.h"
 #include <mdns.h>
 #include <esp_log.h>
-#include <lwip/netdb.h>
-#include <arpa/inet.h>
 #include <cstring>
 
 #define TAG "MDNS"
@@ -25,25 +23,20 @@ void MdnsInit() {
 }
 
 std::string ResolveHostname(const std::string& hostname) {
-    MdnsInit();
+    std::string name = hostname;
+    if (name.size() > 6 && name.substr(name.size() - 6) == ".local") {
+        name = name.substr(0, name.size() - 6);
+    }
     
-    struct addrinfo hints = {};
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    
-    struct addrinfo* res = nullptr;
-    int err = getaddrinfo(hostname.c_str(), nullptr, &hints, &res);
-    
-    if (err != 0 || res == nullptr) {
-        ESP_LOGW(TAG, "Gagal resolve %s (err=%d)", hostname.c_str(), err);
+    esp_ip4_addr_t addr = {};
+    esp_err_t err = mdns_query_a(name.c_str(), 2000, &addr);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Gagal resolve %s (err=%d)", name.c_str(), err);
         return "";
     }
     
-    struct sockaddr_in* addr = (struct sockaddr_in*)res->ai_addr;
-    char ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
-    
-    freeaddrinfo(res);
-    ESP_LOGI(TAG, "Resolve %s → %s", hostname.c_str(), ip);
+    char ip[16];
+    snprintf(ip, sizeof(ip), IPSTR, IP2STR(&addr));
+    ESP_LOGI(TAG, "Resolve %s → %s", name.c_str(), ip);
     return std::string(ip);
 }
