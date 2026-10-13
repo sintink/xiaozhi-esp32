@@ -23,13 +23,15 @@ void MdnsInit() {
 }
 
 std::string ResolveHostname(const std::string& hostname) {
+    MdnsInit();   // ← TAMBAH INI (biar auto-init kalau belum)
+    
     std::string name = hostname;
     if (name.size() > 6 && name.substr(name.size() - 6) == ".local") {
         name = name.substr(0, name.size() - 6);
     }
     
     esp_ip4_addr_t addr = {};
-    esp_err_t err = mdns_query_a(name.c_str(), 2000, &addr);
+    esp_err_t err = mdns_query_a(name.c_str(), 5000, &addr);   // ← timeout 5000ms
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Gagal resolve %s (err=%d)", name.c_str(), err);
         return "";
