@@ -29,7 +29,7 @@ private:
     int eye_offset = 30;
     float current_look_x = 0;
     float current_look_y = 0;
-    int face_state_ = 0;   // 0=idle, 1=listening,
+    int face_state_ = 0;
     int target_look_x = 0;
     int target_look_y = 0;
     bool is_blinking = false;
@@ -38,6 +38,12 @@ private:
     unsigned long next_look = 4000;
     unsigned long last_look = 0;
     unsigned long last_blink = 0;
+
+   // Tambahan buat Sleepy Mode
+    lv_obj_t* z_label_ = nullptr;
+    unsigned long last_activity_time_ = 0;
+    bool is_sleepy_ = false;
+    void StartZAnimation();
 
     void InitEyes();
     void UpdateFace();
