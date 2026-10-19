@@ -45,7 +45,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     ESP_LOGI(TAG, "Initialize LVGL");
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     port_cfg.task_priority = 1;
-    port_cfg.task_stack = 6144;
+    port_cfg.task_stack = 10240;
 #if CONFIG_SOC_CPU_CORES_NUM > 1
     port_cfg.task_affinity = 1;
 #endif
@@ -385,7 +385,7 @@ void OledDisplay::InitEyes() {
 void OledDisplay::StartZAnimation() {
     if (z_label_ == nullptr) return;
     
-    lv_anim_del(z_label_, NULL); // <--- WAJIB: Hapus animasi lama
+    lv_anim_del(z_label_, NULL); 
     lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
     
     lv_anim_t a;
@@ -396,13 +396,9 @@ void OledDisplay::StartZAnimation() {
     lv_anim_set_repeat_delay(&a, 1000); 
     lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
     
+    // CUMA GERAK NAIK. NGGAK ADA OPACITY SAMA SEKALI.
     lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
         lv_obj_set_y((lv_obj_t*)obj, val);
-        // Rumus opacity yang bener (makin ke atas makin pudar)
-        int32_t calc_opa = ((val + 20) * 255) / 30; 
-        if (calc_opa < 0) calc_opa = 0; 
-        if (calc_opa > 255) calc_opa = 255;
-        lv_obj_set_style_opa((lv_obj_t*)obj, (lv_opa_t)calc_opa, 0);
     });
     
     lv_anim_start(&a);
