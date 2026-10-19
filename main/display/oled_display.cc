@@ -45,7 +45,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     ESP_LOGI(TAG, "Initialize LVGL");
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     port_cfg.task_priority = 1;
-    port_cfg.task_stack = 10240;
+    port_cfg.task_stack = 6144;
 #if CONFIG_SOC_CPU_CORES_NUM > 1
     port_cfg.task_affinity = 1;
 #endif
@@ -83,9 +83,6 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
         ESP_LOGE(TAG, "Failed to add display");
         return;
     }
-
-    // Note: SetupUI() should be called by Application::Initialize(), not in constructor
-    // to ensure lvgl objects are created after the display is fully initialized.
 }
 
 void OledDisplay::SetChatMessage(const char* role, const char* content) {
@@ -106,7 +103,6 @@ void OledDisplay::SetChatMessage(const char* role, const char* content) {
 }
 
 void OledDisplay::SetupUI() {
-    // Prevent duplicate calls - if already called, return early
     if (setup_ui_called_) {
         ESP_LOGW(TAG, "SetupUI() called multiple times, skipping duplicate call");
         return;
@@ -114,8 +110,6 @@ void OledDisplay::SetupUI() {
 
     Display::SetupUI();
     SetupUI_128x64();
-
-  
 }
 
 OledDisplay::~OledDisplay() {
@@ -166,8 +160,6 @@ OledDisplay::~OledDisplay() {
 bool OledDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 
 void OledDisplay::Unlock() { lvgl_port_unlock(); }
-
-
 
 void OledDisplay::SetupUI_128x64() {
     DisplayLockGuard lock(this);
@@ -289,21 +281,16 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_size(mouth_, 20, 4);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16);
 
-    /* Subtitle label (overlay di content_, hidden default) */
-subtitle_label_ = lv_label_create(content_);
-lv_obj_set_width(subtitle_label_, LV_HOR_RES - 4);
-lv_label_set_long_mode(subtitle_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
-lv_obj_set_style_text_align(subtitle_label_, LV_TEXT_ALIGN_CENTER, 0);
-lv_label_set_text(subtitle_label_, "");
-lv_obj_align(subtitle_label_, LV_ALIGN_CENTER, 0, 0);
-lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
+    InitEyes();
 
-     /* Label Z untuk ngantuk */
-    z_label_ = lv_label_create(content_);
-    lv_label_set_text(z_label_, "Z");
-    lv_obj_set_style_text_font(z_label_, text_font, 0);
-    lv_obj_align(z_label_, LV_ALIGN_TOP_RIGHT, -10, 10);
-    lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyikan dulu
+    /* Subtitle label (overlay di content_, hidden default) */
+    subtitle_label_ = lv_label_create(content_);
+    lv_obj_set_width(subtitle_label_, LV_HOR_RES - 4);
+    lv_label_set_long_mode(subtitle_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(subtitle_label_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(subtitle_label_, "");
+    lv_obj_align(subtitle_label_, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
 
     /* Low battery popup */
     low_battery_popup_ = lv_obj_create(screen);
@@ -317,14 +304,7 @@ lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
-
-    // --- PINDAH KE SINI ---
-    last_activity_time_ = esp_timer_get_time() / 1000; 
-    InitEyes(); 
 }
-
-
-
 
 void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr || left_eye_ == nullptr) return;
@@ -382,28 +362,6 @@ void OledDisplay::InitEyes() {
     }, 50, this);   // update tiap 50ms
 }
 
-void OledDisplay::StartZAnimation() {
-    if (z_label_ == nullptr) return;
-    
-    lv_anim_del(z_label_, NULL); 
-    lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-    
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, z_label_);
-    lv_anim_set_values(&a, 10, -20); 
-    lv_anim_set_time(&a, 2500);
-    lv_anim_set_repeat_delay(&a, 1000); 
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-    
-    // CUMA GERAK NAIK. NGGAK ADA OPACITY SAMA SEKALI.
-    lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
-        lv_obj_set_y((lv_obj_t*)obj, val);
-    });
-    
-    lv_anim_start(&a);
-}
-
 void OledDisplay::ClearChatMessages() {
     if (subtitle_label_ == nullptr) return;
     DisplayLockGuard lock(this);
@@ -413,7 +371,6 @@ void OledDisplay::ClearChatMessages() {
 
 void OledDisplay::SetFaceState(int state) {
     DisplayLockGuard lock(this);
-    last_activity_time_ = esp_timer_get_time() / 1000;
 
     if (face_state_ != state) {
         face_state_ = state;
@@ -421,48 +378,23 @@ void OledDisplay::SetFaceState(int state) {
     }
 
     if (state == 0) {
+        // Idle → mata full, subtitle hidden
         if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
         if (subtitle_label_) {
             lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
             lv_label_set_text(subtitle_label_, "");
         }
     } else {
+        // Listening/Speaking → mata hidden, subtitle tampil
         if (face_container_) lv_obj_add_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
         if (subtitle_label_) lv_obj_clear_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
-
-        // TAMBAHAN: Kalau lagi kerja, matiin mode ngantuk
-        is_sleepy_ = false;
-        if (z_label_ != nullptr) {
-            lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-            lv_anim_del(z_label_, NULL);
-        }
     }
 }
 
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
-  DisplayLockGuard lock(this); 
-    // 1. Ambil waktu SEKALI aja di awal
     unsigned long now = esp_timer_get_time() / 1000;
-
-    // 2. Logika Sleepy Mode
-    if (face_state_ == 0) { // Kalau lagi idle
-        if (now - last_activity_time_ > 30000 && !is_sleepy_) {
-            is_sleepy_ = true;
-            StartZAnimation();
-        }
-    } else {
-    // Kalau lagi kerja (listening/speaking), reset timer
-    last_activity_time_ = now; 
-    if (is_sleepy_) {
-        is_sleepy_ = false;
-        if (z_label_ != nullptr) { // <--- TAMBAHIN INI
-            lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-            lv_anim_del(z_label_, NULL);
-        }
-    }
-    }
 
     /* --- Smooth lerp gerakan mata --- */
     current_look_x += (target_look_x - current_look_x) * 0.15f;
@@ -501,7 +433,7 @@ void OledDisplay::UpdateFace() {
         }
     }
 
-    /* --- Blink & Sleepy Eyes --- */
+    /* --- Blink --- */
     static unsigned long last_blink = 0;
     if (!is_blinking && now - last_blink > next_blink) {
         is_blinking = true;
@@ -518,7 +450,6 @@ void OledDisplay::UpdateFace() {
     }
 
     if (is_blinking) {
-        // Logika animasi kedip lu (biarin aja)
         unsigned long elapsed = now - blink_start;
         int h = eye_size;
         if (elapsed < 80) {
@@ -531,19 +462,5 @@ void OledDisplay::UpdateFace() {
         }
         lv_obj_set_height(left_eye_, h);
         lv_obj_set_height(right_eye_, h);
-    } else {
-        // ---> TAMBAHAN BARU: Kalau nggak kedip, cek apakah lagi ngantuk <---
-        if (is_sleepy_) {
-            // Mata merem setengah (tingginya dibagi 2)
-            lv_obj_set_height(left_eye_, eye_size / 2);
-            lv_obj_set_height(right_eye_, eye_size / 2);
-            
-            // Opsional: bikin mulutnya agak kebuka dikit pas ngantuk
-            // if (mouth_) lv_obj_set_height(mouth_, 6); 
-        } else {
-            // Mata normal
-            lv_obj_set_height(left_eye_, eye_size);
-            lv_obj_set_height(right_eye_, eye_size);
-        }
     }
 }
