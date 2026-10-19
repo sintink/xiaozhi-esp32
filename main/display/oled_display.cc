@@ -112,8 +112,10 @@ void OledDisplay::SetupUI() {
         return;
     }
 
-    Display::SetupUI();  // Mark SetupUI as called
+    Display::SetupUI();
     SetupUI_128x64();
+
+  
 }
 
 OledDisplay::~OledDisplay() {
@@ -298,6 +300,13 @@ lv_label_set_text(subtitle_label_, "");
 lv_obj_align(subtitle_label_, LV_ALIGN_CENTER, 0, 0);
 lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
 
+  /* Label Z untuk ngantuk */
+z_label_ = lv_label_create(content_);
+lv_label_set_text(z_label_, "Z");
+lv_obj_set_style_text_font(z_label_, text_font, 0);
+lv_obj_align(z_label_, LV_ALIGN_TOP_RIGHT, -10, 10);
+lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyikan dulu
+
     /* Low battery popup */
     low_battery_popup_ = lv_obj_create(screen);
     lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
@@ -371,6 +380,32 @@ void OledDisplay::InitEyes() {
     }, 50, this);   // update tiap 50ms
 }
 
+void OledDisplay::StartZAnimation() {
+    if (z_label_ == nullptr) return;
+    
+    lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
+    
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, z_label_);
+    lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
+        lv_obj_set_y((lv_obj_t*)obj, val);
+    });
+    
+    // Gerak dari Y=10 ke Y=-20 (naik ke atas)
+    lv_anim_set_values(&a, 10, -20);
+    lv_anim_set_time(&a, 2000); // Durasi 2 detik
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE); // Ulang terus
+    
+    // Efek memudar (opacity)
+    lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
+        lv_obj_set_style_opa((lv_obj_t*)obj, val, 0);
+    });
+    lv_anim_set_values(&a, LV_OPA_COVER, LV_OPA_TRANSP);
+    
+    lv_anim_start(&a);
+}
+
 void OledDisplay::ClearChatMessages() {
     if (subtitle_label_ == nullptr) return;
     DisplayLockGuard lock(this);
@@ -380,6 +415,8 @@ void OledDisplay::ClearChatMessages() {
 
 void OledDisplay::SetFaceState(int state) {
     DisplayLockGuard lock(this);
+
+  last_activity_time_ = esp_timer_get_time() / 1000;
 
     if (face_state_ != state) {
         face_state_ = state;
@@ -403,7 +440,24 @@ void OledDisplay::SetFaceState(int state) {
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
+    // 1. Ambil waktu SEKALI aja di awal
     unsigned long now = esp_timer_get_time() / 1000;
+
+    // 2. Logika Sleepy Mode
+    if (face_state_ == 0) { // Kalau lagi idle
+        if (now - last_activity_time_ > 30000 && !is_sleepy_) {
+            is_sleepy_ = true;
+            StartZAnimation();
+        }
+    } else {
+        // Kalau lagi kerja (listening/speaking), reset timer
+        last_activity_time_ = now; 
+        if (is_sleepy_) {
+            is_sleepy_ = false;
+            lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyiin Z
+            lv_anim_del(z_label_, NULL); // Stop animasi
+        }
+    }
 
     /* --- Smooth lerp gerakan mata --- */
     current_look_x += (target_look_x - current_look_x) * 0.15f;
@@ -442,7 +496,7 @@ void OledDisplay::UpdateFace() {
         }
     }
 
-    /* --- Blink --- */
+    /* --- Blink & Sleepy Eyes --- */
     static unsigned long last_blink = 0;
     if (!is_blinking && now - last_blink > next_blink) {
         is_blinking = true;
@@ -459,6 +513,7 @@ void OledDisplay::UpdateFace() {
     }
 
     if (is_blinking) {
+        // Logika animasi kedip lu (biarin aja)
         unsigned long elapsed = now - blink_start;
         int h = eye_size;
         if (elapsed < 80) {
@@ -471,5 +526,19 @@ void OledDisplay::UpdateFace() {
         }
         lv_obj_set_height(left_eye_, h);
         lv_obj_set_height(right_eye_, h);
+    } else {
+        // ---> TAMBAHAN BARU: Kalau nggak kedip, cek apakah lagi ngantuk <---
+        if (is_sleepy_) {
+            // Mata merem setengah (tingginya dibagi 2)
+            lv_obj_set_height(left_eye_, eye_size / 2);
+            lv_obj_set_height(right_eye_, eye_size / 2);
+            
+            // Opsional: bikin mulutnya agak kebuka dikit pas ngantuk
+            // if (mouth_) lv_obj_set_height(mouth_, 6); 
+        } else {
+            // Mata normal
+            lv_obj_set_height(left_eye_, eye_size);
+            lv_obj_set_height(right_eye_, eye_size);
+        }
     }
 }
