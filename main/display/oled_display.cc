@@ -388,20 +388,18 @@ void OledDisplay::StartZAnimation() {
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, z_label_);
+    lv_anim_set_values(&a, 10, -20); // Y dari 10 ke -20
+    lv_anim_set_time(&a, 2500);
+    lv_anim_set_repeat_delay(&a, 1000); // Jeda 1 detik sebelum ngulang
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    
     lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
         lv_obj_set_y((lv_obj_t*)obj, val);
+        // Kalkulasi opacity berdasarkan posisi Y (makin ke atas makin pudar)
+        lv_opa_t opa = (lv_opa_t)(255 - ((val + 20) * 255 / 30)); 
+        if (opa < 0) opa = 0;
+        lv_obj_set_style_opa((lv_obj_t*)obj, opa, 0);
     });
-    
-    // Gerak dari Y=10 ke Y=-20 (naik ke atas)
-    lv_anim_set_values(&a, 10, -20);
-    lv_anim_set_time(&a, 2000); // Durasi 2 detik
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE); // Ulang terus
-    
-    // Efek memudar (opacity)
-    lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
-        lv_obj_set_style_opa((lv_obj_t*)obj, val, 0);
-    });
-    lv_anim_set_values(&a, LV_OPA_COVER, LV_OPA_TRANSP);
     
     lv_anim_start(&a);
 }
