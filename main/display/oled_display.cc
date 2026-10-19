@@ -388,17 +388,26 @@ void OledDisplay::StartZAnimation() {
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, z_label_);
-    lv_anim_set_values(&a, 10, -20); // Y dari 10 ke -20
+    
+    // Atur posisi awal dan akhir
+    lv_anim_set_values(&a, 10, -20); 
     lv_anim_set_time(&a, 2500);
-    lv_anim_set_repeat_delay(&a, 1000); // Jeda 1 detik sebelum ngulang
+    lv_anim_set_repeat_delay(&a, 1000); 
     lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
     
+    // Callback untuk gerak dan fade out
     lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
         lv_obj_set_y((lv_obj_t*)obj, val);
-        // Kalkulasi opacity berdasarkan posisi Y (makin ke atas makin pudar)
-        lv_opa_t opa = (lv_opa_t)(255 - ((val + 20) * 255 / 30)); 
-        if (opa < 0) opa = 0;
-        lv_obj_set_style_opa((lv_obj_t*)obj, opa, 0);
+        
+        // Pakai int32_t biar bisa dihitung minus
+        int32_t calc_opa = 255 - ((val + 20) * 255 / 30);
+        
+        // Cek kalau angkanya minus, jadikan 0
+        if (calc_opa < 0) calc_opa = 0; 
+        // Cek kalau angkanya lebih dari 255, jadikan 255
+        if (calc_opa > 255) calc_opa = 255;
+        
+        lv_obj_set_style_opa((lv_obj_t*)obj, (lv_opa_t)calc_opa, 0);
     });
     
     lv_anim_start(&a);
