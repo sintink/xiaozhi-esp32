@@ -289,8 +289,6 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_size(mouth_, 20, 4);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16);
 
-    InitEyes();
-
     /* Subtitle label (overlay di content_, hidden default) */
 subtitle_label_ = lv_label_create(content_);
 lv_obj_set_width(subtitle_label_, LV_HOR_RES - 4);
@@ -300,12 +298,12 @@ lv_label_set_text(subtitle_label_, "");
 lv_obj_align(subtitle_label_, LV_ALIGN_CENTER, 0, 0);
 lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
 
-  /* Label Z untuk ngantuk */
-z_label_ = lv_label_create(content_);
-lv_label_set_text(z_label_, "Z");
-lv_obj_set_style_text_font(z_label_, text_font, 0);
-lv_obj_align(z_label_, LV_ALIGN_TOP_RIGHT, -10, 10);
-lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyikan dulu
+     /* Label Z untuk ngantuk */
+    z_label_ = lv_label_create(content_);
+    lv_label_set_text(z_label_, "Z");
+    lv_obj_set_style_text_font(z_label_, text_font, 0);
+    lv_obj_align(z_label_, LV_ALIGN_TOP_RIGHT, -10, 10);
+    lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyikan dulu
 
     /* Low battery popup */
     low_battery_popup_ = lv_obj_create(screen);
@@ -319,6 +317,10 @@ lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyikan dulu
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+
+    // --- PINDAH KE SINI ---
+    last_activity_time_ = esp_timer_get_time() / 1000; 
+    InitEyes(); 
 }
 
 
@@ -383,30 +385,23 @@ void OledDisplay::InitEyes() {
 void OledDisplay::StartZAnimation() {
     if (z_label_ == nullptr) return;
     
+    lv_anim_del(z_label_, NULL); // <--- WAJIB: Hapus animasi lama
     lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
     
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, z_label_);
-    
-    // Atur posisi awal dan akhir
     lv_anim_set_values(&a, 10, -20); 
     lv_anim_set_time(&a, 2500);
     lv_anim_set_repeat_delay(&a, 1000); 
     lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
     
-    // Callback untuk gerak dan fade out
     lv_anim_set_exec_cb(&a, [](void* obj, int32_t val) {
         lv_obj_set_y((lv_obj_t*)obj, val);
-        
-        // Pakai int32_t biar bisa dihitung minus
-        int32_t calc_opa = 255 - ((val + 20) * 255 / 30);
-        
-        // Cek kalau angkanya minus, jadikan 0
+        // Rumus opacity yang bener (makin ke atas makin pudar)
+        int32_t calc_opa = ((val + 20) * 255) / 30; 
         if (calc_opa < 0) calc_opa = 0; 
-        // Cek kalau angkanya lebih dari 255, jadikan 255
         if (calc_opa > 255) calc_opa = 255;
-        
         lv_obj_set_style_opa((lv_obj_t*)obj, (lv_opa_t)calc_opa, 0);
     });
     
@@ -422,8 +417,7 @@ void OledDisplay::ClearChatMessages() {
 
 void OledDisplay::SetFaceState(int state) {
     DisplayLockGuard lock(this);
-
-  last_activity_time_ = esp_timer_get_time() / 1000;
+    last_activity_time_ = esp_timer_get_time() / 1000;
 
     if (face_state_ != state) {
         face_state_ = state;
@@ -431,16 +425,21 @@ void OledDisplay::SetFaceState(int state) {
     }
 
     if (state == 0) {
-        // Idle → mata full, subtitle hidden
         if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
         if (subtitle_label_) {
             lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
             lv_label_set_text(subtitle_label_, "");
         }
     } else {
-        // Listening/Speaking → mata hidden, subtitle tampil
         if (face_container_) lv_obj_add_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
         if (subtitle_label_) lv_obj_clear_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
+
+        // TAMBAHAN: Kalau lagi kerja, matiin mode ngantuk
+        is_sleepy_ = false;
+        if (z_label_ != nullptr) {
+            lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
+            lv_anim_del(z_label_, NULL);
+        }
     }
 }
 
@@ -457,13 +456,15 @@ void OledDisplay::UpdateFace() {
             StartZAnimation();
         }
     } else {
-        // Kalau lagi kerja (listening/speaking), reset timer
-        last_activity_time_ = now; 
-        if (is_sleepy_) {
-            is_sleepy_ = false;
-            lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyiin Z
-            lv_anim_del(z_label_, NULL); // Stop animasi
+    // Kalau lagi kerja (listening/speaking), reset timer
+    last_activity_time_ = now; 
+    if (is_sleepy_) {
+        is_sleepy_ = false;
+        if (z_label_ != nullptr) { // <--- TAMBAHIN INI
+            lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
+            lv_anim_del(z_label_, NULL);
         }
+    }
     }
 
     /* --- Smooth lerp gerakan mata --- */
