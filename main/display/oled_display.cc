@@ -446,6 +446,7 @@ void OledDisplay::SetFaceState(int state) {
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
+  DisplayLockGuard lock(this); 
     // 1. Ambil waktu SEKALI aja di awal
     unsigned long now = esp_timer_get_time() / 1000;
 
