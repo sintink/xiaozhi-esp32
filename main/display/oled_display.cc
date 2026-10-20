@@ -110,7 +110,10 @@ void OledDisplay::SetupUI_128x64() {
     DisplayLockGuard lock(this);
 
     auto screen = lv_screen_active();
-    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
+    
+    // FIX WARNA KEBALIK: Background pakai WHITE, Mata pakai BLACK.
+    // Ini akan menghasilkan layar Hitam dengan Mata Putih di OLED kamu.
+    lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
 
     container_ = lv_obj_create(screen);
@@ -131,27 +134,27 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_bg_opa(face_container_, LV_OPA_TRANSP, 0);
     lv_obj_center(face_container_);
 
-    /* === MATA KIRI === */
+    /* === MATA KIRI (Ukuran 36px) === */
     left_eye_ = lv_obj_create(face_container_);
-    lv_obj_set_style_bg_color(left_eye_, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(left_eye_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(left_eye_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(left_eye_, 0, 0);
-    lv_obj_set_style_radius(left_eye_, 4, 0); 
-    lv_obj_set_size(left_eye_, 24, 24);
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_, -4);
-    lv_obj_set_style_transform_pivot_x(left_eye_, 12, 0);
-    lv_obj_set_style_transform_pivot_y(left_eye_, 12, 0);
+    lv_obj_set_style_radius(left_eye_, 6, 0); 
+    lv_obj_set_size(left_eye_, 36, 36);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_, -2);
+    lv_obj_set_style_transform_pivot_x(left_eye_, 18, 0);
+    lv_obj_set_style_transform_pivot_y(left_eye_, 18, 0);
 
-    /* === MATA KANAN === */
+    /* === MATA KANAN (Ukuran 36px) === */
     right_eye_ = lv_obj_create(face_container_);
-    lv_obj_set_style_bg_color(right_eye_, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(right_eye_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(right_eye_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(right_eye_, 0, 0);
-    lv_obj_set_style_radius(right_eye_, 4, 0);
-    lv_obj_set_size(right_eye_, 24, 24);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_, -4);
-    lv_obj_set_style_transform_pivot_x(right_eye_, 12, 0);
-    lv_obj_set_style_transform_pivot_y(right_eye_, 12, 0);
+    lv_obj_set_style_radius(right_eye_, 6, 0);
+    lv_obj_set_size(right_eye_, 36, 36);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_, -2);
+    lv_obj_set_style_transform_pivot_x(right_eye_, 18, 0);
+    lv_obj_set_style_transform_pivot_y(right_eye_, 18, 0);
 
     InitEyes();
 }
@@ -188,24 +191,23 @@ void OledDisplay::SetPowerSaveMode(bool on) {
     LvglDisplay::SetPowerSaveMode(on);
 }
 
-// TANGKAP STATE DARI SISTEM
 void OledDisplay::SetFaceState(int state) {
     DisplayLockGuard lock(this);
     anim_state_ = state;
 }
 
-// Fungsi pembantu bentuk mata
+// Fungsi pembantu bentuk mata (Diperbesar)
 void OledDisplay::ApplyExpression(int emote, int breath, int bounce_y) {
-    int w = 24, h = 24, r = 4;
+    int w = 36, h = 36, r = 6;
     int angle_l = 0, angle_r = 0;
 
     switch (emote) {
-        case 0: w = 24; h = 24; r = 4; angle_l = 0; angle_r = 0; break; // Neutral
-        case 1: w = 28; h = 14; r = LV_RADIUS_CIRCLE; angle_l = 0; angle_r = 0; break; // Happy
-        case 2: w = 26; h = 10; r = 0; angle_l = 200; angle_r = -200; break; // Angry
-        case 3: w = 24; h = 4; r = 2; angle_l = 0; angle_r = 0; break; // Sleepy
-        case 4: w = 32; h = 32; r = 6; angle_l = 0; angle_r = 0; break; // Surprised
-        case 5: w = 26; h = 10; r = 0; angle_l = -200; angle_r = 200; break; // Sad
+        case 0: w = 36; h = 36; r = 6; angle_l = 0; angle_r = 0; break; // Neutral (Kotak besar)
+        case 1: w = 40; h = 20; r = LV_RADIUS_CIRCLE; angle_l = 0; angle_r = 0; break; // Happy (Sipit lebar)
+        case 2: w = 38; h = 16; r = 0; angle_l = 200; angle_r = -200; break; // Angry (Miring tajam)
+        case 3: w = 36; h = 6; r = 3; angle_l = 0; angle_r = 0; break; // Sleepy (Garis tipis)
+        case 4: w = 44; h = 44; r = 8; angle_l = 0; angle_r = 0; break; // Surprised (Bulat besar)
+        case 5: w = 38; h = 16; r = 0; angle_l = -200; angle_r = 200; break; // Sad (Miring turun)
     }
 
     w += breath;
@@ -234,40 +236,33 @@ void OledDisplay::ApplyExpression(int emote, int breath, int bounce_y) {
     }
 }
 
-// UPDATE FACE (Jalan di Task LVGL, tanpa Lock)
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
-    if (esp_timer_get_time() - boot_time_us_ < 8000000LL) return; // Grace Period 8s
+    if (esp_timer_get_time() - boot_time_us_ < 8000000LL) return; 
 
     int64_t now = esp_timer_get_time() / 1000;
     int breath = (int)(sin(now / 300.0) * 1.5);
     int bounce_y = 0;
 
-    // ==========================================
-    // LOGIKA BERDASARKAN STATE (IDLE, LISTEN, SPEAK)
-    // ==========================================
-    
     if (anim_state_ == 0) {
-        // === IDLE (BENGONG / SANTAI) ===
+        // === IDLE ===
         if (now > next_emote_change_) {
             current_emotion_ = esp_random() % 6; 
             next_emote_change_ = now + 3000 + (esp_random() % 4000);
         }
         if (now > next_look_) {
-            target_look_x_ = (esp_random() % 9) - 4; 
-            target_look_y_ = (esp_random() % 5) - 2;  
+            target_look_x_ = (esp_random() % 11) - 5; 
+            target_look_y_ = (esp_random() % 7) - 3;  
             next_look_ = now + 1500 + (esp_random() % 2000);
         }
         
-        // Kedip normal
         if (!is_blinking_ && now > next_blink_) {
             is_blinking_ = true;
             blink_start_ = now;
             next_blink_ = now + 3000 + (esp_random() % 3000); 
         }
 
-        // Wink (Kedip sebelah)
         if (wink_eye_ == 0 && now > next_wink_) {
             wink_eye_ = (esp_random() % 2) + 1; 
             wink_start_ = now;
@@ -275,15 +270,11 @@ void OledDisplay::UpdateFace() {
         }
     } 
     else if (anim_state_ == 1) {
-        // === LISTENING (FOKUS MENDENGARKAN) ===
-        // Mata fokus ke tengah, tidak melirik
+        // === LISTENING ===
         target_look_x_ = 0;
         target_look_y_ = 0;
-        
-        // Ekspresi selalu fokus (jangan berubah-ubah)
         current_emotion_ = 0; 
         
-        // Jarang kedip
         if (!is_blinking_ && now > next_blink_) {
             is_blinking_ = true;
             blink_start_ = now;
@@ -291,35 +282,25 @@ void OledDisplay::UpdateFace() {
         }
     } 
     else if (anim_state_ == 2) {
-        // === SPEAKING (SINKRONISASI BICARA) ===
-        // Mata selalu fokus ke tengah
+        // === SPEAKING ===
         target_look_x_ = 0;
         target_look_y_ = 0;
         
-        // Ilusi sinkronisasi suara: Mata memantul cepat (seperti irama ngomong)
-        // Oscillator cepat setiap ~120ms
-        bounce_y = (int)(sin(now / 40.0) * 3.0); 
+        // Pantulan lebih besar dan cepat untuk efek bicara
+        bounce_y = (int)(sin(now / 40.0) * 4.0); 
         
-        // Biarkan server yang menentukan emosi saat bicara, 
-        // TAPI kalau tidak ada emosi, kadang berubah-ubah agar hidup
         if (now > next_emote_change_) {
             int r = esp_random() % 3;
-            if (r == 0) current_emotion_ = 1; // Happy
-            else if (r == 1) current_emotion_ = 0; // Normal
-            else current_emotion_ = 4; // Surprised (antusias)
+            if (r == 0) current_emotion_ = 1;
+            else if (r == 1) current_emotion_ = 0;
+            else current_emotion_ = 4;
             
             next_emote_change_ = now + 1000 + (esp_random() % 1500);
         }
     }
 
-    // ==========================================
-    // RENDER BENTUK
-    // ==========================================
     ApplyExpression(current_emotion_, breath, bounce_y);
 
-    // ==========================================
-    // HANDLE BLINKING & WINKING
-    // ==========================================
     int left_h = last_lh_;
     int right_h = last_rh_;
 
@@ -344,27 +325,22 @@ void OledDisplay::UpdateFace() {
         }
     }
 
-    // Terapkan tinggi mata (jika berubah)
     if (left_h != last_lh_ || right_h != last_rh_) {
         lv_obj_set_height(left_eye_, left_h);
         lv_obj_set_height(right_eye_, right_h);
     }
 
-    // ==========================================
-    // HANDLE POSISI (LIRIK & BOUNCE)
-    // ==========================================
     look_x_ += (target_look_x_ - look_x_) * 0.2f;
     look_y_ += (target_look_y_ - look_y_) * 0.2f;
     
     int ox = std::clamp((int)look_x_, -6, 6);
     int oy = std::clamp((int)look_y_, -3, 3);
 
-    // Gabungkan posisi lirik dengan efek pantulan suara (bounce_y)
     int final_oy = oy + bounce_y;
 
     if (ox != last_ox_ || final_oy != last_oy_) {
-        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, -4 + final_oy);
-        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, -4 + final_oy);
+        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, -2 + final_oy);
+        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, -2 + final_oy);
         last_ox_ = ox;
         last_oy_ = final_oy;
     }
