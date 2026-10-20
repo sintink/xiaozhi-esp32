@@ -319,29 +319,30 @@ InitEyes();
 
 void OledDisplay::ApplyEyeSize(const char* emotion) {
     if (emotion == nullptr || left_eye_ == nullptr) return;
-    std::string e(emotion);
 
-    if (e == "happy") {
+    // PAKAI STRCMP, JANGAN PAKAI std::string LAGI
+    if (strcmp(emotion, "happy") == 0) {
         lv_obj_set_size(left_eye_, eye_size + 4, eye_size - 6);
         lv_obj_set_size(right_eye_, eye_size + 4, eye_size - 6);
         lv_obj_set_style_radius(left_eye_, 15, 0);
         lv_obj_set_style_radius(right_eye_, 15, 0);
-    } else if (e == "surprised") {
+    } else if (strcmp(emotion, "surprised") == 0) {
         lv_obj_set_size(left_eye_, eye_size + 6, eye_size + 6);
         lv_obj_set_size(right_eye_, eye_size + 6, eye_size + 6);
         lv_obj_set_style_radius(left_eye_, 20, 0);
         lv_obj_set_style_radius(right_eye_, 20, 0);
-    } else if (e == "sleepy") {
+    } else if (strcmp(emotion, "sleepy") == 0) {
         lv_obj_set_size(left_eye_, eye_size, eye_size / 2);
         lv_obj_set_size(right_eye_, eye_size, eye_size / 2);
         lv_obj_set_style_radius(left_eye_, 0, 0);
         lv_obj_set_style_radius(right_eye_, 0, 0);
-    } else if (e == "sleep") {
+    } else if (strcmp(emotion, "sleep") == 0) {
         lv_obj_set_size(left_eye_, eye_size, 2);
         lv_obj_set_size(right_eye_, eye_size, 2);
         lv_obj_set_style_radius(left_eye_, 0, 0);
         lv_obj_set_style_radius(right_eye_, 0, 0);
     } else {
+        // Normal
         lv_obj_set_size(left_eye_, eye_size, eye_size);
         lv_obj_set_size(right_eye_, eye_size, eye_size);
         lv_obj_set_style_radius(left_eye_, 2, 0);
