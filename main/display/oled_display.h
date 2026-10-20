@@ -16,18 +16,15 @@ private:
     lv_obj_t* status_label_ = nullptr;
     lv_obj_t* notification_label_ = nullptr;
 
-    // Wajah
     lv_obj_t* face_container_ = nullptr;
     lv_obj_t* left_eye_ = nullptr;
     lv_obj_t* right_eye_ = nullptr;
-    lv_obj_t* mouth_ = nullptr;
     lv_timer_t* face_timer_ = nullptr;
 
     int64_t boot_time_us_ = 0;
 
-    // Variabel Animasi (Ukuran besar & agak kotak)
-    int eye_size_ = 24; 
-    int eye_offset_ = 28; // Jarak antar mata
+    // Variabel Animasi
+    int eye_offset_ = 25; 
     
     float look_x_ = 0;
     float look_y_ = 0;
@@ -39,19 +36,29 @@ private:
     int64_t next_blink_ = 0;
     int64_t next_look_ = 0;
 
-    int current_emotion_ = 0; // 0=Normal, 1=Happy, 2=Sleepy, 3=Surprised, 4=Angry
-    int anim_state_ = 0;      // 0=Idle, 1=Listening, 2=Speaking
+    int current_emotion_ = 0; 
+    int64_t next_emote_change_ = 0;
+    
+    int wink_eye_ = 0; 
+    int64_t wink_start_ = 0;
+    int64_t next_wink_ = 0;
 
-    // Optimasi Redraw (Mencegah Task Watchdog)
+    // STATE ANIMASI (0=Idle, 1=Listening, 2=Speaking)
+    int anim_state_ = 0; 
+
+    // Optimasi Redraw
     int last_w_ = 0;
-    int last_h_ = 0;
+    int last_lh_ = 0;
+    int last_rh_ = 0;
     int last_ox_ = 0;
     int last_oy_ = 0;
-    int last_y_offset_ = 0;
-    int last_mouth_h_ = 0;
+    int last_angle_l_ = 0;
+    int last_angle_r_ = 0;
+    int last_radius_ = 0;
 
     void InitEyes();
     void UpdateFace();
+    void ApplyExpression(int emote, int breath, int bounce_y);
     void SetupUI_128x64();
 
     virtual bool Lock(int timeout_ms = 0) override;
@@ -69,7 +76,9 @@ public:
     virtual void SetTheme(Theme* theme) override;
     virtual bool IsMonochrome() const override { return true; }
     void SetPowerSaveMode(bool on) override;
-    void SetFaceState(int state) override;
+    
+    // Tangkap State Sistem
+    virtual void SetFaceState(int state) override; 
 };
 
 #endif  // OLED_DISPLAY_H
