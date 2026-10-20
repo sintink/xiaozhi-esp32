@@ -23,8 +23,8 @@ private:
 
     int64_t boot_time_us_ = 0;
 
-    // Variabel Animasi
-    int eye_offset_ = 25; 
+    // Variabel Animasi (Diperbesar)
+    int eye_offset_ = 32; 
     
     float look_x_ = 0;
     float look_y_ = 0;
@@ -77,7 +77,6 @@ public:
     virtual bool IsMonochrome() const override { return true; }
     void SetPowerSaveMode(bool on) override;
     
-    // Tangkap State Sistem
     virtual void SetFaceState(int state) override; 
 };
 
