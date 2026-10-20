@@ -39,6 +39,12 @@ private:
     unsigned long last_look = 0;
     unsigned long last_blink = 0;
 
+   // Tambahan untuk fitur Tidur & Ngantuk
+lv_obj_t* z_label_ = nullptr;
+unsigned long last_activity_time_ = 0;
+bool is_sleepy_ = false;
+bool is_asleep_ = false;
+
     void InitEyes();
     void UpdateFace();
 
