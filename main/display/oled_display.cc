@@ -389,11 +389,9 @@ void OledDisplay::UpdateFace() {
     look_x_ += (target_look_x_ - look_x_) * 0.15f;
     look_y_ += (target_look_y_ - look_y_) * 0.15f;
     
-    int ox = (int)look_x_;
-    int oy = (int)look_y_;
-    if (ox < -5) ox = -5; if (ox > 5) ox = 5;
-    if (oy < -3) oy = -3; if (oy > 3) oy = 3;
-
+    int ox = std::clamp((int)look_x_, -5, 5);
+int oy = std::clamp((int)look_y_, -3, 3);
+  
     // Cek apakah sedang komunikasi (mata agak ke atas)
     int y_offset = -4; // Default idle
     if (subtitle_label_ && !lv_obj_has_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN)) {
