@@ -13,6 +13,8 @@ private:
     esp_lcd_panel_handle_t panel_ = nullptr;
 
     lv_obj_t* container_ = nullptr;
+    lv_obj_t* status_label_ = nullptr;
+    lv_obj_t* notification_label_ = nullptr;
 
     // Wajah
     lv_obj_t* face_container_ = nullptr;
@@ -21,12 +23,11 @@ private:
     lv_obj_t* mouth_ = nullptr;
     lv_timer_t* face_timer_ = nullptr;
 
-    // Waktu Boot (Pencegah Bootloop saat OTA)
     int64_t boot_time_us_ = 0;
 
-    // Variabel Animasi
-    int eye_size_ = 18;
-    int eye_offset_ = 28;
+    // Variabel Animasi (Ukuran besar & agak kotak)
+    int eye_size_ = 24; 
+    int eye_offset_ = 28; // Jarak antar mata
     
     float look_x_ = 0;
     float look_y_ = 0;
@@ -41,13 +42,20 @@ private:
     int current_emotion_ = 0; // 0=Normal, 1=Happy, 2=Sleepy, 3=Surprised, 4=Angry
     int anim_state_ = 0;      // 0=Idle, 1=Listening, 2=Speaking
 
+    // Optimasi Redraw (Mencegah Task Watchdog)
+    int last_w_ = 0;
+    int last_h_ = 0;
+    int last_ox_ = 0;
+    int last_oy_ = 0;
+    int last_y_offset_ = 0;
+    int last_mouth_h_ = 0;
+
     void InitEyes();
     void UpdateFace();
+    void SetupUI_128x64();
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
-
-    void SetupUI_128x64();
 
 public:
     OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width,
@@ -55,11 +63,8 @@ public:
     ~OledDisplay();
 
     virtual void SetupUI() override;
-    
-    // Override kosong agar sistem tidak error saat mengirim teks
     virtual void SetChatMessage(const char* role, const char* content) override {}
     virtual void ClearChatMessages() override {}
-    
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetTheme(Theme* theme) override;
     virtual bool IsMonochrome() const override { return true; }
