@@ -47,7 +47,7 @@ bool is_asleep_ = false;
 
     void InitEyes();
     void UpdateFace();
-
+    void ApplyEyeSize(const char* emotion);
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
 
