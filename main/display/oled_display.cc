@@ -437,40 +437,43 @@ void OledDisplay::UpdateFace() {
     unsigned long now = esp_timer_get_time() / 1000;
     unsigned long idle_time = now - last_activity_time_;
 
-    /* --- LOGIKA NGANTUK & TIDUR --- */
+    // --- LOGIKA TIDUR (CEK WAKTU) ---
     if (face_state_ == 0) { // Mode Idle
-        if (idle_time > 60000) { // Diem > 60 detik -> Tidur
-            if (!is_asleep_) {
-                is_asleep_ = true;
-                is_sleepy_ = false;
-                ApplyEyeSize("sleep");
-                if (z_label_ != nullptr) lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-            }
-        } else if (idle_time > 30000) { // Diem > 30 detik -> Ngantuk
-            if (!is_sleepy_ && !is_asleep_) {
-                is_sleepy_ = true;
-               ApplyEyeSize("sleepy");
-                if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-            }
-        } else { // Normal (Kurang dari 30 detik)
-            if (is_sleepy_ || is_asleep_) {
-                is_sleepy_ = false;
-                is_asleep_ = false;
-                ApplyEyeSize("normal");
-                if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-            }
+        if (idle_time > 60000 && sleep_state_ != 2) {
+            // Lewat 60 detik: TIDUR
+            sleep_state_ = 2;
+            lv_obj_set_height(left_eye_, 2);
+            lv_obj_set_height(right_eye_, 2);
+            if (z_label_ != nullptr) lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Munculin Z
+        } 
+        else if (idle_time > 30000 && idle_time <= 60000 && sleep_state_ != 1) {
+            // Lewat 30 detik: NGANTUK
+            sleep_state_ = 1;
+            lv_obj_set_height(left_eye_, eye_size / 2);
+            lv_obj_set_height(right_eye_, eye_size / 2);
+            if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyiin Z
         }
+        else if (idle_time <= 30000 && sleep_state_ != 0) {
+            // Di bawah 30 detik: NORMAL
+            sleep_state_ = 0;
+            lv_obj_set_height(left_eye_, eye_size);
+            lv_obj_set_height(right_eye_, eye_size);
+            if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
+        }
+    } else {
+        // Kalau lagi Listening/Speaking, reset timer dan sembunyiin Z
+        last_activity_time_ = now;
+        sleep_state_ = 0;
+        if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
     }
 
-    /* --- KEDIP (Cuma jalan kalau lagi melek / normal) --- */
-    if (!is_sleepy_ && !is_asleep_) {
+    // --- LOGIKA KEDIP (Cuma jalan kalau gak ngantuk/tidur) ---
+    if (sleep_state_ == 0) {
         static unsigned long last_blink = 0;
         if (!is_blinking && now - last_blink > next_blink) {
             is_blinking = true;
             blink_start = now;
             last_blink = now;
-            
-            // Waktu acak buat kedip berikutnya
             next_blink = 2500 + (esp_random() % 2500);
         }
 
@@ -483,34 +486,17 @@ void OledDisplay::UpdateFace() {
                 h = 2 + ((elapsed - 80) * (eye_size - 2) / 80);
             } else {
                 is_blinking = false;
-                h = eye_size;
             }
             lv_obj_set_height(left_eye_, h);
             lv_obj_set_height(right_eye_, h);
         }
-    }
-
-    /* --- Lirik Mata (Cuma jalan kalau melek) --- */
-    if (!is_sleepy_ && !is_asleep_) {
+        
+        // --- Lirik Mata ---
         current_look_x += (target_look_x - current_look_x) * 0.15f;
         current_look_y += (target_look_y - current_look_y) * 0.15f;
-
         int ox = (int)current_look_x;
         int oy = (int)current_look_y;
-        
         lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset + ox, -4 + oy);
         lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset + ox, -4 + oy);
-
-        static unsigned long last_look = 0;
-        if (now - last_look > next_look) {
-            last_look = now;
-            next_look = 2000 + (esp_random() % 3000);
-            target_look_x = (int)(esp_random() % 9) - 4;
-            target_look_y = (int)(esp_random() % 5) - 2;
-        }
-    } else {
-        // Kalau ngantuk/tidur, mata tetep di tengah
-        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset, -4);
-        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset, -4);
     }
 }
