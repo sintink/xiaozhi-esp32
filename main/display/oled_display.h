@@ -22,25 +22,34 @@ private:
     lv_obj_t* left_eye_ = nullptr;
     lv_obj_t* right_eye_ = nullptr;
     lv_obj_t* mouth_ = nullptr;
+    lv_obj_t* z_label_ = nullptr;
+    lv_obj_t* subtitle_label_ = nullptr;
     lv_timer_t* face_timer_ = nullptr;
-    lv_obj_t* subtitle_label_ = nullptr; 
 
-    int eye_size = 18;
-    int eye_offset = 30;
-    float current_look_x = 0;
-    float current_look_y = 0;
-    int face_state_ = 0;
-    int target_look_x = 0;
-    int target_look_y = 0;
-    bool is_blinking = false;
-    unsigned long blink_start = 0;
-    unsigned long next_blink = 3000;
-    unsigned long next_look = 4000;
-    unsigned long last_look = 0;
-    unsigned long last_blink = 0;
+    // Ukuran mata (mochi)
+    static constexpr int kEyeSize = 20;
+    static constexpr int kEyeOffset = 28;
+
+    // Posisi lirik
+    float look_x_ = 0.f;
+    float look_y_ = 0.f;
+    int target_look_x_ = 0;
+    int target_look_y_ = 0;
+
+    // State
+    int face_state_ = 0;   // 0=idle, 1=listening, 2=speaking
+    int sleep_state_ = 0;  // 0=normal, 1=ngantuk, 2=tidur, 3=kaget
+
+    // Timer (pakai int64_t agar tidak overflow)
+    int64_t last_activity_us_ = 0;
+    int64_t next_blink_us_ = 0;
+    int64_t blink_start_us_ = 0;
+    int64_t next_look_us_ = 0;
+    bool is_blinking_ = false;
 
     void InitEyes();
     void UpdateFace();
+    void ApplyEyeExpression(int expression);  // 0=normal,1=happy,2=sleepy,3=sleep,4=surprised
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
@@ -54,7 +63,7 @@ public:
 
     virtual void SetupUI() override;
     virtual void SetChatMessage(const char* role, const char* content) override;
-    virtual void ClearChatMessages() override; 
+    virtual void ClearChatMessages() override;
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetTheme(Theme* theme) override;
     virtual bool IsMonochrome() const override { return true; }
