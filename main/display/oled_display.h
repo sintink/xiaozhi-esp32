@@ -46,7 +46,7 @@ private:
 
     void InitEyes();
     void UpdateFace();
-    void ApplyEyeSize(const char* emotion); // Fungsi tanpa Lock
+    void ApplyEyeSize(const char* emotion); // <--- INI YANG KURANG TADI
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
