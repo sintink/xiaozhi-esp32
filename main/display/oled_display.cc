@@ -317,10 +317,8 @@ last_activity_time_ = esp_timer_get_time() / 1000;
 InitEyes(); 
 }
 
-void OledDisplay::SetEmotion(const char* emotion) {
+void OledDisplay::ApplyEyeSize(const char* emotion) {
     if (emotion == nullptr || left_eye_ == nullptr) return;
-
-    DisplayLockGuard lock(this);
     std::string e(emotion);
 
     if (e == "happy") {
@@ -328,27 +326,33 @@ void OledDisplay::SetEmotion(const char* emotion) {
         lv_obj_set_size(right_eye_, eye_size + 4, eye_size - 6);
         lv_obj_set_style_radius(left_eye_, 15, 0);
         lv_obj_set_style_radius(right_eye_, 15, 0);
-    } else if (e == "surprised") { // Pas bangun kaget
+    } else if (e == "surprised") {
         lv_obj_set_size(left_eye_, eye_size + 6, eye_size + 6);
         lv_obj_set_size(right_eye_, eye_size + 6, eye_size + 6);
         lv_obj_set_style_radius(left_eye_, 20, 0);
         lv_obj_set_style_radius(right_eye_, 20, 0);
-    } else if (e == "sleepy") { // Mata setengah (Ngantuk)
+    } else if (e == "sleepy") {
         lv_obj_set_size(left_eye_, eye_size, eye_size / 2);
         lv_obj_set_size(right_eye_, eye_size, eye_size / 2);
         lv_obj_set_style_radius(left_eye_, 0, 0);
         lv_obj_set_style_radius(right_eye_, 0, 0);
-    } else if (e == "sleep") { // Mata mengecil (Tidur)
+    } else if (e == "sleep") {
         lv_obj_set_size(left_eye_, eye_size, 2);
         lv_obj_set_size(right_eye_, eye_size, 2);
         lv_obj_set_style_radius(left_eye_, 0, 0);
         lv_obj_set_style_radius(right_eye_, 0, 0);
-    } else { // Normal
+    } else {
         lv_obj_set_size(left_eye_, eye_size, eye_size);
         lv_obj_set_size(right_eye_, eye_size, eye_size);
         lv_obj_set_style_radius(left_eye_, 2, 0);
         lv_obj_set_style_radius(right_eye_, 2, 0);
     }
+}
+
+void OledDisplay::SetEmotion(const char* emotion) {
+    if (emotion == nullptr || left_eye_ == nullptr) return;
+    DisplayLockGuard lock(this); // Tetap pakai lock karena dipanggil dari luar
+    ApplyEyeSize(emotion);
 }
 
 void OledDisplay::SetTheme(Theme* theme) {
@@ -410,13 +414,13 @@ void OledDisplay::SetFaceState(int state) {
             lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
             lv_label_set_text(subtitle_label_, "");
         }
-        SetEmotion("normal");
+         ApplyEyeSize("normal");
     } else {
         // Listening / Speaking
         if (was_sleeping) {
             // EFEK KAGET: Munculin muka dengan mata besar dulu sebelum disembunyiin
             if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
-            SetEmotion("surprised"); 
+            ApplyEyeSize("surprised"); 
             // Catatan: Karena ini fungsi void, kita biarin dia nampilin teks di frame berikutnya.
             // Efek kagetnya bakal sekilas keliatan sebelum subtitle muncul.
         }
@@ -438,20 +442,20 @@ void OledDisplay::UpdateFace() {
             if (!is_asleep_) {
                 is_asleep_ = true;
                 is_sleepy_ = false;
-                SetEmotion("sleep");
+                ApplyEyeSize("sleep");
                 if (z_label_ != nullptr) lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
             }
         } else if (idle_time > 30000) { // Diem > 30 detik -> Ngantuk
             if (!is_sleepy_ && !is_asleep_) {
                 is_sleepy_ = true;
-                SetEmotion("sleepy");
+               ApplyEyeSize("sleepy");
                 if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
             }
         } else { // Normal (Kurang dari 30 detik)
             if (is_sleepy_ || is_asleep_) {
                 is_sleepy_ = false;
                 is_asleep_ = false;
-                SetEmotion("normal");
+                ApplyEyeSize("normal");
                 if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
             }
         }
