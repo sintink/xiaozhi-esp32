@@ -5,25 +5,24 @@
 
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
+#include <cstdint>
 
 class OledDisplay : public LvglDisplay {
 private:
     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
     esp_lcd_panel_handle_t panel_ = nullptr;
 
-    lv_obj_t* top_bar_ = nullptr;
-    lv_obj_t* status_bar_ = nullptr;
-    lv_obj_t* content_ = nullptr;
     lv_obj_t* container_ = nullptr;
-    lv_obj_t* side_bar_ = nullptr;
 
     // Wajah
     lv_obj_t* face_container_ = nullptr;
     lv_obj_t* left_eye_ = nullptr;
     lv_obj_t* right_eye_ = nullptr;
     lv_obj_t* mouth_ = nullptr;
-    lv_obj_t* subtitle_label_ = nullptr;
     lv_timer_t* face_timer_ = nullptr;
+
+    // Waktu Boot (Pencegah Bootloop saat OTA)
+    int64_t boot_time_us_ = 0;
 
     // Variabel Animasi
     int eye_size_ = 18;
@@ -35,15 +34,15 @@ private:
     int target_look_y_ = 0;
 
     bool is_blinking_ = false;
-    unsigned long blink_start_ = 0;
-    unsigned long next_blink_ = 3000;
-    unsigned long next_look_ = 4000;
+    int64_t blink_start_ = 0;
+    int64_t next_blink_ = 0;
+    int64_t next_look_ = 0;
 
     int current_emotion_ = 0; // 0=Normal, 1=Happy, 2=Sleepy, 3=Surprised, 4=Angry
+    int anim_state_ = 0;      // 0=Idle, 1=Listening, 2=Speaking
 
     void InitEyes();
     void UpdateFace();
-    void ApplyEyeShape(int emotion);
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
@@ -56,8 +55,11 @@ public:
     ~OledDisplay();
 
     virtual void SetupUI() override;
-    virtual void SetChatMessage(const char* role, const char* content) override;
-    virtual void ClearChatMessages() override; 
+    
+    // Override kosong agar sistem tidak error saat mengirim teks
+    virtual void SetChatMessage(const char* role, const char* content) override {}
+    virtual void ClearChatMessages() override {}
+    
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetTheme(Theme* theme) override;
     virtual bool IsMonochrome() const override { return true; }
