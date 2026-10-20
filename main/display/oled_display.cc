@@ -281,7 +281,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_size(mouth_, 20, 4);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16);
 
-    InitEyes();
+  //  InitEyes();
 
     /* Subtitle label (overlay di content_, hidden default) */
     subtitle_label_ = lv_label_create(content_);
@@ -304,6 +304,17 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+
+/* Label Z untuk Tidur (Diem aja di pojok kanan) */
+z_label_ = lv_label_create(content_);
+lv_label_set_text(z_label_, "Z");
+lv_obj_set_style_text_font(z_label_, text_font, 0);
+lv_obj_align(z_label_, LV_ALIGN_TOP_RIGHT, -10, 5);
+lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN); // Sembunyikan dulu
+
+// Taruh di paling bawah fungsi sebelum kurung tutup }
+last_activity_time_ = esp_timer_get_time() / 1000; 
+InitEyes(); 
 }
 
 void OledDisplay::SetEmotion(const char* emotion) {
@@ -312,21 +323,27 @@ void OledDisplay::SetEmotion(const char* emotion) {
     DisplayLockGuard lock(this);
     std::string e(emotion);
 
-    if (e == "happy" || e == "laughing") {
+    if (e == "happy") {
         lv_obj_set_size(left_eye_, eye_size + 4, eye_size - 6);
         lv_obj_set_size(right_eye_, eye_size + 4, eye_size - 6);
-    } else if (e == "sad" || e == "crying") {
-        lv_obj_set_size(left_eye_, eye_size - 2, eye_size - 4);
-        lv_obj_set_size(right_eye_, eye_size - 2, eye_size - 4);
-        lv_obj_set_style_radius(left_eye_, 6, 0);
-        lv_obj_set_style_radius(right_eye_, 6, 0);
-    } else if (e == "surprised") {
+        lv_obj_set_style_radius(left_eye_, 15, 0);
+        lv_obj_set_style_radius(right_eye_, 15, 0);
+    } else if (e == "surprised") { // Pas bangun kaget
         lv_obj_set_size(left_eye_, eye_size + 6, eye_size + 6);
         lv_obj_set_size(right_eye_, eye_size + 6, eye_size + 6);
-    } else if (e == "angry") {
-        lv_obj_set_size(left_eye_, eye_size + 2, eye_size - 4);
-        lv_obj_set_size(right_eye_, eye_size + 2, eye_size - 4);
-    } else {
+        lv_obj_set_style_radius(left_eye_, 20, 0);
+        lv_obj_set_style_radius(right_eye_, 20, 0);
+    } else if (e == "sleepy") { // Mata setengah (Ngantuk)
+        lv_obj_set_size(left_eye_, eye_size, eye_size / 2);
+        lv_obj_set_size(right_eye_, eye_size, eye_size / 2);
+        lv_obj_set_style_radius(left_eye_, 0, 0);
+        lv_obj_set_style_radius(right_eye_, 0, 0);
+    } else if (e == "sleep") { // Mata mengecil (Tidur)
+        lv_obj_set_size(left_eye_, eye_size, 2);
+        lv_obj_set_size(right_eye_, eye_size, 2);
+        lv_obj_set_style_radius(left_eye_, 0, 0);
+        lv_obj_set_style_radius(right_eye_, 0, 0);
+    } else { // Normal
         lv_obj_set_size(left_eye_, eye_size, eye_size);
         lv_obj_set_size(right_eye_, eye_size, eye_size);
         lv_obj_set_style_radius(left_eye_, 2, 0);
@@ -371,21 +388,39 @@ void OledDisplay::ClearChatMessages() {
 
 void OledDisplay::SetFaceState(int state) {
     DisplayLockGuard lock(this);
+    
+    // Reset timer aktivitas biar dia bangun
+    last_activity_time_ = esp_timer_get_time() / 1000; 
+
+    // Cek apakah sebelumnya dia lagi tidur/ngantuk
+    bool was_sleeping = (is_sleepy_ || is_asleep_);
+    
+    is_sleepy_ = false;
+    is_asleep_ = false;
+    if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
 
     if (face_state_ != state) {
         face_state_ = state;
-        next_look = 0;
     }
 
     if (state == 0) {
-        // Idle → mata full, subtitle hidden
+        // Idle
         if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
         if (subtitle_label_) {
             lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
             lv_label_set_text(subtitle_label_, "");
         }
+        SetEmotion("normal");
     } else {
-        // Listening/Speaking → mata hidden, subtitle tampil
+        // Listening / Speaking
+        if (was_sleeping) {
+            // EFEK KAGET: Munculin muka dengan mata besar dulu sebelum disembunyiin
+            if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
+            SetEmotion("surprised"); 
+            // Catatan: Karena ini fungsi void, kita biarin dia nampilin teks di frame berikutnya.
+            // Efek kagetnya bakal sekilas keliatan sebelum subtitle muncul.
+        }
+        
         if (face_container_) lv_obj_add_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
         if (subtitle_label_) lv_obj_clear_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
     }
@@ -395,72 +430,82 @@ void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
     unsigned long now = esp_timer_get_time() / 1000;
+    unsigned long idle_time = now - last_activity_time_;
 
-    /* --- Smooth lerp gerakan mata --- */
-    current_look_x += (target_look_x - current_look_x) * 0.15f;
-    current_look_y += (target_look_y - current_look_y) * 0.15f;
+    /* --- LOGIKA NGANTUK & TIDUR --- */
+    if (face_state_ == 0) { // Mode Idle
+        if (idle_time > 60000) { // Diem > 60 detik -> Tidur
+            if (!is_asleep_) {
+                is_asleep_ = true;
+                is_sleepy_ = false;
+                SetEmotion("sleep");
+                if (z_label_ != nullptr) lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
+            }
+        } else if (idle_time > 30000) { // Diem > 30 detik -> Ngantuk
+            if (!is_sleepy_ && !is_asleep_) {
+                is_sleepy_ = true;
+                SetEmotion("sleepy");
+                if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
+            }
+        } else { // Normal (Kurang dari 30 detik)
+            if (is_sleepy_ || is_asleep_) {
+                is_sleepy_ = false;
+                is_asleep_ = false;
+                SetEmotion("normal");
+                if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
 
-    int ox = (int)current_look_x;
-    int oy = (int)current_look_y;
-    if (ox < -5) ox = -5;
-    if (ox > 5) ox = 5;
-    if (oy < -3) oy = -3;
-    if (oy > 3) oy = 3;
+    /* --- KEDIP (Cuma jalan kalau lagi melek / normal) --- */
+    if (!is_sleepy_ && !is_asleep_) {
+        static unsigned long last_blink = 0;
+        if (!is_blinking && now - last_blink > next_blink) {
+            is_blinking = true;
+            blink_start = now;
+            last_blink = now;
+            
+            // Waktu acak buat kedip berikutnya
+            next_blink = 2500 + (esp_random() % 2500);
+        }
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset + ox, -4 + oy);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset + ox, -4 + oy);
+        if (is_blinking) {
+            unsigned long elapsed = now - blink_start;
+            int h = eye_size;
+            if (elapsed < 80) {
+                h = eye_size - (elapsed * (eye_size - 2) / 80);
+            } else if (elapsed < 160) {
+                h = 2 + ((elapsed - 80) * (eye_size - 2) / 80);
+            } else {
+                is_blinking = false;
+                h = eye_size;
+            }
+            lv_obj_set_height(left_eye_, h);
+            lv_obj_set_height(right_eye_, h);
+        }
+    }
 
-    /* --- Trigger look baru --- */
-    static unsigned long last_look = 0;
-    if (now - last_look > next_look) {
-        last_look = now;
+    /* --- Lirik Mata (Cuma jalan kalau melek) --- */
+    if (!is_sleepy_ && !is_asleep_) {
+        current_look_x += (target_look_x - current_look_x) * 0.15f;
+        current_look_y += (target_look_y - current_look_y) * 0.15f;
 
-        if (face_state_ == 1) {
-            // Listening — fokus ke tengah
-            target_look_x = 0;
-            target_look_y = 0;
-            next_look = 2000;
-        } else if (face_state_ == 2) {
-            // Speaking — gerak ringan
-            next_look = 1000 + (esp_random() % 1500);
-            target_look_x = (int)(esp_random() % 5) - 2;
-            target_look_y = (int)(esp_random() % 3) - 1;
-        } else {
-            // Idle — lirik random
+        int ox = (int)current_look_x;
+        int oy = (int)current_look_y;
+        
+        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset + ox, -4 + oy);
+        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset + ox, -4 + oy);
+
+        static unsigned long last_look = 0;
+        if (now - last_look > next_look) {
+            last_look = now;
             next_look = 2000 + (esp_random() % 3000);
             target_look_x = (int)(esp_random() % 9) - 4;
             target_look_y = (int)(esp_random() % 5) - 2;
         }
-    }
-
-    /* --- Blink --- */
-    static unsigned long last_blink = 0;
-    if (!is_blinking && now - last_blink > next_blink) {
-        is_blinking = true;
-        blink_start = now;
-        last_blink = now;
-
-        if (face_state_ == 1) {
-            // Listening — jarang kedip
-            next_blink = 5000 + (esp_random() % 3000);
-        } else {
-            // Idle & Speaking — normal
-            next_blink = 2500 + (esp_random() % 2500);
-        }
-    }
-
-    if (is_blinking) {
-        unsigned long elapsed = now - blink_start;
-        int h = eye_size;
-        if (elapsed < 80) {
-            h = eye_size - (elapsed * (eye_size - 2) / 80);
-        } else if (elapsed < 160) {
-            h = 2 + ((elapsed - 80) * (eye_size - 2) / 80);
-        } else {
-            is_blinking = false;
-            h = eye_size;
-        }
-        lv_obj_set_height(left_eye_, h);
-        lv_obj_set_height(right_eye_, h);
+    } else {
+        // Kalau ngantuk/tidur, mata tetep di tengah
+        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset, -4);
+        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset, -4);
     }
 }
