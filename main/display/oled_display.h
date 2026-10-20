@@ -39,14 +39,8 @@ private:
     unsigned long last_look = 0;
     unsigned long last_blink = 0;
 
-    // Fitur Tidur & Ngantuk
-    lv_obj_t* z_label_ = nullptr;
-    unsigned long last_activity_time_ = 0;
-    int sleep_state_ = 0; // 0=Normal, 1=Ngantuk, 2=Tidur, 3=Kaget
-
     void InitEyes();
     void UpdateFace();
-    void ApplyEyeSize(const char* emotion); // <--- INI YANG KURANG TADI
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
