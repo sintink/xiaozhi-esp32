@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <string>
 #include <cstring>
-#include <cmath>
 
 #include <esp_err.h>
 #include <esp_log.h>
@@ -28,9 +27,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
                          int width, int height, bool mirror_x, bool mirror_y)
     : panel_io_(panel_io), panel_(panel) {
     
-    // Simpan waktu boot untuk Grace Period
     boot_time_us_ = esp_timer_get_time();
-    
     width_ = width;
     height_ = height;
 
@@ -49,7 +46,6 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     theme_manager.RegisterTheme("dark", dark_theme);
     current_theme_ = dark_theme;
 
-    ESP_LOGI(TAG, "Initialize LVGL");
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     port_cfg.task_priority = 1;
     port_cfg.task_stack = 6144;
@@ -58,7 +54,6 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
 #endif
     lvgl_port_init(&port_cfg);
 
-    ESP_LOGI(TAG, "Adding OLED display");
     const lvgl_port_display_cfg_t display_cfg = {
         .io_handle = panel_io_,
         .panel_handle = panel_,
@@ -101,9 +96,7 @@ OledDisplay::~OledDisplay() {
         lv_timer_del(face_timer_);
         face_timer_ = nullptr;
     }
-
     if (container_ != nullptr) lv_obj_del(container_);
-
     if (panel_ != nullptr) esp_lcd_panel_del(panel_);
     if (panel_io_ != nullptr) esp_lcd_panel_io_del(panel_io_);
     lvgl_port_deinit();
@@ -116,53 +109,58 @@ void OledDisplay::SetupUI_128x64() {
     DisplayLockGuard lock(this);
 
     auto screen = lv_screen_active();
-    
-    // Background putih agar mata hitam (OLED) terlihat jelas
     lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
 
-    /* Container utama (Full layar tanpa top/status bar) */
     container_ = lv_obj_create(screen);
     lv_obj_set_size(container_, LV_HOR_RES, LV_VER_RES);
     lv_obj_set_style_pad_all(container_, 0, 0);
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_TRANSP, 0);
 
-    /* Face container */
+    status_label_ = lv_label_create(screen);
+    lv_obj_add_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+    
+    notification_label_ = lv_label_create(screen);
+    lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
+
     face_container_ = lv_obj_create(container_);
     lv_obj_set_size(face_container_, LV_HOR_RES, LV_VER_RES);
     lv_obj_set_style_border_width(face_container_, 0, 0);
     lv_obj_set_style_bg_opa(face_container_, LV_OPA_TRANSP, 0);
     lv_obj_center(face_container_);
 
-    /* Mata Kiri - pakai LV_RADIUS_CIRCLE agar otomatis membulat tanpa ubah style terus-menerus */
+    /* === MATA KIRI (Kotak Membulat) === */
     left_eye_ = lv_obj_create(face_container_);
     lv_obj_set_style_bg_color(left_eye_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(left_eye_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(left_eye_, 0, 0);
-    lv_obj_set_style_radius(left_eye_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_radius(left_eye_, 4, 0); // Kotak membulat ala Xiaozhi
     lv_obj_set_size(left_eye_, eye_size_, eye_size_);
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_, -4);
 
-    /* Mata Kanan */
+    /* === MATA KANAN (Kotak Membulat) === */
     right_eye_ = lv_obj_create(face_container_);
     lv_obj_set_style_bg_color(right_eye_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(right_eye_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(right_eye_, 0, 0);
-    lv_obj_set_style_radius(right_eye_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_radius(right_eye_, 4, 0);
     lv_obj_set_size(right_eye_, eye_size_, eye_size_);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_, -4);
 
-    /* Mulut */
+    /* === MULUT === */
     mouth_ = lv_obj_create(face_container_);
     lv_obj_set_style_bg_color(mouth_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(mouth_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(mouth_, 0, 0);
-    lv_obj_set_style_radius(mouth_, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_size(mouth_, 10, 2);
+    lv_obj_set_style_radius(mouth_, 2, 0); // Mulut agak kotak
+    lv_obj_set_size(mouth_, 12, 3);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16);
 
-    // Mulai Timer Animasi
+    last_w_ = eye_size_;
+    last_h_ = eye_size_;
+    last_mouth_h_ = 3;
+
     InitEyes();
 }
 
@@ -191,9 +189,7 @@ void OledDisplay::SetEmotion(const char* emotion) {
     }
 }
 
-void OledDisplay::SetTheme(Theme* theme) {
-    // Tidak ada text, jadi kosongkan saja
-}
+void OledDisplay::SetTheme(Theme* theme) {}
 
 void OledDisplay::SetPowerSaveMode(bool on) {
     if (panel_) {
@@ -207,50 +203,44 @@ void OledDisplay::SetPowerSaveMode(bool on) {
 
 void OledDisplay::SetFaceState(int state) {
     DisplayLockGuard lock(this);
-    anim_state_ = state; // Menyimpan status sistem (Idle, Listening, Speaking)
+    anim_state_ = state; 
 }
 
+// PERHATIAN: Fungsi ini berjalan di dalam Task LVGL. JANGAN pakai Lock!
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
-    // --- GRACE PERIOD 8 DETIK (Mencegah Bootloop saat OTA) ---
+    // Grace Period 8 detik (Mencegah bentrok saat booting/OTA)
     if (esp_timer_get_time() - boot_time_us_ < 8000000LL) {
         return; 
     }
 
     int64_t now = esp_timer_get_time() / 1000;
 
-    // 1. Tentukan Bentuk Dasar dari Emosi
-    int base_w = 20;
-    int base_h = 20;
+    // 1. Tentukan Bentuk Dasar
+    int base_w = 24;
+    int base_h = 24;
     int base_y = -4;
     
     switch (current_emotion_) {
-        case 1: // Happy (Mata lebar ceper ala mochi)
-            base_w = 26; base_h = 10; break;
-        case 2: // Sleepy (Mata sipit ngantuk)
-            base_w = 22; base_h = 6; break;
-        case 3: // Surprised (Mata bulat besar kaget)
-            base_w = 28; base_h = 28; break;
-        case 4: // Angry (Mata tajam marah)
-            base_w = 26; base_h = 6; base_y = -2; break;
-        default: // Normal
-            base_w = 20; base_h = 20; break;
+        case 1: base_w = 30; base_h = 12; break; // Happy
+        case 2: base_w = 26; base_h = 8;  break; // Sleepy
+        case 3: base_w = 30; base_h = 30; break; // Surprised
+        case 4: base_w = 28; base_h = 10; base_y = -2; break; // Angry
+        default: base_w = 24; base_h = 24; break; // Normal
     }
 
-    // 2. Modifikasi dari State (Listening / Speaking)
+    // 2. Modifikasi dari State
     if (anim_state_ == 1) { 
-        // Listening: Mata agak membesar dan fokus
         base_w += 2;
         base_h += 2;
     } else if (anim_state_ == 2) { 
-        // Speaking: Mata memantul / berdenyut santai
         int bounce = (now / 150) % 3;
         if (bounce == 0) base_h += 4;
         else if (bounce == 1) base_h += 2;
     }
 
-    // 3. Logika Kedip (Hanya saat Idle)
+    // 3. Logika Kedip
     if (anim_state_ == 0) {
         if (!is_blinking_ && now - next_blink_ > 0) {
             is_blinking_ = true;
@@ -270,11 +260,7 @@ void OledDisplay::UpdateFace() {
         }
     }
 
-    // Terapkan ukuran mata baru
-    lv_obj_set_size(left_eye_, base_w, base_h);
-    lv_obj_set_size(right_eye_, base_w, base_h);
-
-    // 4. Logika Lirik Mata (Hanya saat Idle)
+    // 4. Logika Lirik
     if (anim_state_ == 1) {
         target_look_x_ = 0;
         target_look_y_ = 0;
@@ -290,18 +276,37 @@ void OledDisplay::UpdateFace() {
     int ox = std::clamp((int)look_x_, -5, 5);
     int oy = std::clamp((int)look_y_, -3, 3);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, base_y + oy);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, base_y + oy);
+    // --- PENCEGAHAN WATCHDOG: Hanya render jika ada perubahan! ---
+    bool size_changed = (base_w != last_w_ || base_h != last_h_);
+    bool pos_changed  = (ox != last_ox_ || oy != last_oy_ || base_y != last_y_offset_);
 
-    // 5. Logika Mulut (Buka tutup saat Speaking)
+    if (size_changed) {
+        lv_obj_set_size(left_eye_, base_w, base_h);
+        lv_obj_set_size(right_eye_, base_w, base_h);
+        last_w_ = base_w;
+        last_h_ = base_h;
+    }
+
+    if (pos_changed) {
+        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, base_y + oy);
+        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, base_y + oy);
+        last_ox_ = ox;
+        last_oy_ = oy;
+        last_y_offset_ = base_y;
+    }
+
+    // 5. Logika Mulut
     if (mouth_ != nullptr) {
+        int mouth_h = 3;
         if (anim_state_ == 2) {
-            // Mulut komat-kamit buka tutup halus
-            int mouth_h = 4 + (int)(4.0 + 4.0 * sin(now / 80.0));
-            lv_obj_set_size(mouth_, 12, mouth_h);
-        } else {
-            // Diam
-            lv_obj_set_size(mouth_, 10, 2);
+            mouth_h = 4 + ((now / 100) % 4); // Komat-kamit
+        }
+        
+        if (mouth_h != last_mouth_h_) {
+            lv_obj_set_height(mouth_, mouth_h);
+            // Sesuaikan posisi Y mulut karena tingginya berubah
+            lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16 + (mouth_h / 2));
+            last_mouth_h_ = mouth_h;
         }
     }
 }
