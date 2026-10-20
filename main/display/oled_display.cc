@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <string>
 #include <cstring>
+#include <cmath>
 
 #include <esp_err.h>
 #include <esp_log.h>
@@ -109,7 +110,7 @@ void OledDisplay::SetupUI_128x64() {
     DisplayLockGuard lock(this);
 
     auto screen = lv_screen_active();
-    lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
 
     container_ = lv_obj_create(screen);
@@ -130,36 +131,27 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_bg_opa(face_container_, LV_OPA_TRANSP, 0);
     lv_obj_center(face_container_);
 
-    /* === MATA KIRI (Kotak Membulat) === */
+    /* === MATA KIRI === */
     left_eye_ = lv_obj_create(face_container_);
-    lv_obj_set_style_bg_color(left_eye_, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(left_eye_, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(left_eye_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(left_eye_, 0, 0);
-    lv_obj_set_style_radius(left_eye_, 4, 0); // Kotak membulat ala Xiaozhi
-    lv_obj_set_size(left_eye_, eye_size_, eye_size_);
+    lv_obj_set_style_radius(left_eye_, 4, 0); 
+    lv_obj_set_size(left_eye_, 24, 24);
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_, -4);
+    lv_obj_set_style_transform_pivot_x(left_eye_, 12, 0);
+    lv_obj_set_style_transform_pivot_y(left_eye_, 12, 0);
 
-    /* === MATA KANAN (Kotak Membulat) === */
+    /* === MATA KANAN === */
     right_eye_ = lv_obj_create(face_container_);
-    lv_obj_set_style_bg_color(right_eye_, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(right_eye_, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(right_eye_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(right_eye_, 0, 0);
     lv_obj_set_style_radius(right_eye_, 4, 0);
-    lv_obj_set_size(right_eye_, eye_size_, eye_size_);
+    lv_obj_set_size(right_eye_, 24, 24);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_, -4);
-
-    /* === MULUT === */
-    mouth_ = lv_obj_create(face_container_);
-    lv_obj_set_style_bg_color(mouth_, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(mouth_, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(mouth_, 0, 0);
-    lv_obj_set_style_radius(mouth_, 2, 0); // Mulut agak kotak
-    lv_obj_set_size(mouth_, 12, 3);
-    lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16);
-
-    last_w_ = eye_size_;
-    last_h_ = eye_size_;
-    last_mouth_h_ = 3;
+    lv_obj_set_style_transform_pivot_x(right_eye_, 12, 0);
+    lv_obj_set_style_transform_pivot_y(right_eye_, 12, 0);
 
     InitEyes();
 }
@@ -176,17 +168,12 @@ void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr) return;
     DisplayLockGuard lock(this);
 
-    if (strcmp(emotion, "happy") == 0 || strcmp(emotion, "laughing") == 0) {
-        current_emotion_ = 1;
-    } else if (strcmp(emotion, "sleepy") == 0) {
-        current_emotion_ = 2;
-    } else if (strcmp(emotion, "surprised") == 0) {
-        current_emotion_ = 3;
-    } else if (strcmp(emotion, "angry") == 0) {
-        current_emotion_ = 4;
-    } else {
-        current_emotion_ = 0;
-    }
+    if (strcmp(emotion, "happy") == 0) current_emotion_ = 1;
+    else if (strcmp(emotion, "sleepy") == 0) current_emotion_ = 3;
+    else if (strcmp(emotion, "surprised") == 0) current_emotion_ = 4;
+    else if (strcmp(emotion, "angry") == 0) current_emotion_ = 2;
+    else if (strcmp(emotion, "sad") == 0) current_emotion_ = 5;
+    else current_emotion_ = 0;
 }
 
 void OledDisplay::SetTheme(Theme* theme) {}
@@ -201,112 +188,184 @@ void OledDisplay::SetPowerSaveMode(bool on) {
     LvglDisplay::SetPowerSaveMode(on);
 }
 
+// TANGKAP STATE DARI SISTEM
 void OledDisplay::SetFaceState(int state) {
     DisplayLockGuard lock(this);
-    anim_state_ = state; 
+    anim_state_ = state;
 }
 
-// PERHATIAN: Fungsi ini berjalan di dalam Task LVGL. JANGAN pakai Lock!
+// Fungsi pembantu bentuk mata
+void OledDisplay::ApplyExpression(int emote, int breath, int bounce_y) {
+    int w = 24, h = 24, r = 4;
+    int angle_l = 0, angle_r = 0;
+
+    switch (emote) {
+        case 0: w = 24; h = 24; r = 4; angle_l = 0; angle_r = 0; break; // Neutral
+        case 1: w = 28; h = 14; r = LV_RADIUS_CIRCLE; angle_l = 0; angle_r = 0; break; // Happy
+        case 2: w = 26; h = 10; r = 0; angle_l = 200; angle_r = -200; break; // Angry
+        case 3: w = 24; h = 4; r = 2; angle_l = 0; angle_r = 0; break; // Sleepy
+        case 4: w = 32; h = 32; r = 6; angle_l = 0; angle_r = 0; break; // Surprised
+        case 5: w = 26; h = 10; r = 0; angle_l = -200; angle_r = 200; break; // Sad
+    }
+
+    w += breath;
+    h += breath;
+
+    if (w != last_w_ || h != last_lh_ || r != last_radius_ || angle_l != last_angle_l_) {
+        lv_obj_set_size(left_eye_, w, h);
+        lv_obj_set_size(right_eye_, w, h);
+        lv_obj_set_style_radius(left_eye_, r, 0);
+        lv_obj_set_style_radius(right_eye_, r, 0);
+        
+        lv_obj_set_style_transform_pivot_x(left_eye_, w/2, 0);
+        lv_obj_set_style_transform_pivot_y(left_eye_, h/2, 0);
+        lv_obj_set_style_transform_pivot_x(right_eye_, w/2, 0);
+        lv_obj_set_style_transform_pivot_y(right_eye_, h/2, 0);
+
+        lv_obj_set_style_transform_angle(left_eye_, angle_l, 0);
+        lv_obj_set_style_transform_angle(right_eye_, angle_r, 0);
+
+        last_w_ = w;
+        last_lh_ = h;
+        last_rh_ = h;
+        last_radius_ = r;
+        last_angle_l_ = angle_l;
+        last_angle_r_ = angle_r;
+    }
+}
+
+// UPDATE FACE (Jalan di Task LVGL, tanpa Lock)
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
 
-    // Grace Period 8 detik (Mencegah bentrok saat booting/OTA)
-    if (esp_timer_get_time() - boot_time_us_ < 8000000LL) {
-        return; 
-    }
+    if (esp_timer_get_time() - boot_time_us_ < 8000000LL) return; // Grace Period 8s
 
     int64_t now = esp_timer_get_time() / 1000;
+    int breath = (int)(sin(now / 300.0) * 1.5);
+    int bounce_y = 0;
 
-    // 1. Tentukan Bentuk Dasar
-    int base_w = 24;
-    int base_h = 24;
-    int base_y = -4;
+    // ==========================================
+    // LOGIKA BERDASARKAN STATE (IDLE, LISTEN, SPEAK)
+    // ==========================================
     
-    switch (current_emotion_) {
-        case 1: base_w = 30; base_h = 12; break; // Happy
-        case 2: base_w = 26; base_h = 8;  break; // Sleepy
-        case 3: base_w = 30; base_h = 30; break; // Surprised
-        case 4: base_w = 28; base_h = 10; base_y = -2; break; // Angry
-        default: base_w = 24; base_h = 24; break; // Normal
-    }
-
-    // 2. Modifikasi dari State
-    if (anim_state_ == 1) { 
-        base_w += 2;
-        base_h += 2;
-    } else if (anim_state_ == 2) { 
-        int bounce = (now / 150) % 3;
-        if (bounce == 0) base_h += 4;
-        else if (bounce == 1) base_h += 2;
-    }
-
-    // 3. Logika Kedip
     if (anim_state_ == 0) {
-        if (!is_blinking_ && now - next_blink_ > 0) {
-            is_blinking_ = true;
-            blink_start_ = now;
-            next_blink_ = now + 2000 + (esp_random() % 3000);
+        // === IDLE (BENGONG / SANTAI) ===
+        if (now > next_emote_change_) {
+            current_emotion_ = esp_random() % 6; 
+            next_emote_change_ = now + 3000 + (esp_random() % 4000);
         }
-
-        if (is_blinking_) {
-            int64_t elapsed = now - blink_start_;
-            if (elapsed < 80) {
-                base_h = base_h - (elapsed * (base_h - 2) / 80);
-            } else if (elapsed < 160) {
-                base_h = 2 + ((elapsed - 80) * (base_h - 2) / 80);
-            } else {
-                is_blinking_ = false;
-            }
-        }
-    }
-
-    // 4. Logika Lirik
-    if (anim_state_ == 1) {
-        target_look_x_ = 0;
-        target_look_y_ = 0;
-    } else if (now - next_look_ > 0) {
-        next_look_ = now + 2000 + (esp_random() % 3000);
-        target_look_x_ = (int)(esp_random() % 9) - 4;
-        target_look_y_ = (int)(esp_random() % 5) - 2;
-    }
-
-    look_x_ += (target_look_x_ - look_x_) * 0.15f;
-    look_y_ += (target_look_y_ - look_y_) * 0.15f;
-    
-    int ox = std::clamp((int)look_x_, -5, 5);
-    int oy = std::clamp((int)look_y_, -3, 3);
-
-    // --- PENCEGAHAN WATCHDOG: Hanya render jika ada perubahan! ---
-    bool size_changed = (base_w != last_w_ || base_h != last_h_);
-    bool pos_changed  = (ox != last_ox_ || oy != last_oy_ || base_y != last_y_offset_);
-
-    if (size_changed) {
-        lv_obj_set_size(left_eye_, base_w, base_h);
-        lv_obj_set_size(right_eye_, base_w, base_h);
-        last_w_ = base_w;
-        last_h_ = base_h;
-    }
-
-    if (pos_changed) {
-        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, base_y + oy);
-        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, base_y + oy);
-        last_ox_ = ox;
-        last_oy_ = oy;
-        last_y_offset_ = base_y;
-    }
-
-    // 5. Logika Mulut
-    if (mouth_ != nullptr) {
-        int mouth_h = 3;
-        if (anim_state_ == 2) {
-            mouth_h = 4 + ((now / 100) % 4); // Komat-kamit
+        if (now > next_look_) {
+            target_look_x_ = (esp_random() % 9) - 4; 
+            target_look_y_ = (esp_random() % 5) - 2;  
+            next_look_ = now + 1500 + (esp_random() % 2000);
         }
         
-        if (mouth_h != last_mouth_h_) {
-            lv_obj_set_height(mouth_, mouth_h);
-            // Sesuaikan posisi Y mulut karena tingginya berubah
-            lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16 + (mouth_h / 2));
-            last_mouth_h_ = mouth_h;
+        // Kedip normal
+        if (!is_blinking_ && now > next_blink_) {
+            is_blinking_ = true;
+            blink_start_ = now;
+            next_blink_ = now + 3000 + (esp_random() % 3000); 
         }
+
+        // Wink (Kedip sebelah)
+        if (wink_eye_ == 0 && now > next_wink_) {
+            wink_eye_ = (esp_random() % 2) + 1; 
+            wink_start_ = now;
+            next_wink_ = now + 6000 + (esp_random() % 5000);
+        }
+    } 
+    else if (anim_state_ == 1) {
+        // === LISTENING (FOKUS MENDENGARKAN) ===
+        // Mata fokus ke tengah, tidak melirik
+        target_look_x_ = 0;
+        target_look_y_ = 0;
+        
+        // Ekspresi selalu fokus (jangan berubah-ubah)
+        current_emotion_ = 0; 
+        
+        // Jarang kedip
+        if (!is_blinking_ && now > next_blink_) {
+            is_blinking_ = true;
+            blink_start_ = now;
+            next_blink_ = now + 4000 + (esp_random() % 3000); 
+        }
+    } 
+    else if (anim_state_ == 2) {
+        // === SPEAKING (SINKRONISASI BICARA) ===
+        // Mata selalu fokus ke tengah
+        target_look_x_ = 0;
+        target_look_y_ = 0;
+        
+        // Ilusi sinkronisasi suara: Mata memantul cepat (seperti irama ngomong)
+        // Oscillator cepat setiap ~120ms
+        bounce_y = (int)(sin(now / 40.0) * 3.0); 
+        
+        // Biarkan server yang menentukan emosi saat bicara, 
+        // TAPI kalau tidak ada emosi, kadang berubah-ubah agar hidup
+        if (now > next_emote_change_) {
+            int r = esp_random() % 3;
+            if (r == 0) current_emotion_ = 1; // Happy
+            else if (r == 1) current_emotion_ = 0; // Normal
+            else current_emotion_ = 4; // Surprised (antusias)
+            
+            next_emote_change_ = now + 1000 + (esp_random() % 1500);
+        }
+    }
+
+    // ==========================================
+    // RENDER BENTUK
+    // ==========================================
+    ApplyExpression(current_emotion_, breath, bounce_y);
+
+    // ==========================================
+    // HANDLE BLINKING & WINKING
+    // ==========================================
+    int left_h = last_lh_;
+    int right_h = last_rh_;
+
+    if (is_blinking_) {
+        int64_t elapsed = now - blink_start_;
+        if (elapsed < 80) {
+            left_h = right_h = last_lh_ - (elapsed * (last_lh_ - 2) / 80);
+        } else if (elapsed < 160) {
+            left_h = right_h = 2 + ((elapsed - 80) * (last_lh_ - 2) / 80);
+        } else {
+            is_blinking_ = false;
+        }
+    }
+
+    if (wink_eye_ != 0) {
+        int64_t elapsed = now - wink_start_;
+        if (elapsed < 200) {
+            if (wink_eye_ == 1) left_h = 2;
+            if (wink_eye_ == 2) right_h = 2;
+        } else {
+            wink_eye_ = 0;
+        }
+    }
+
+    // Terapkan tinggi mata (jika berubah)
+    if (left_h != last_lh_ || right_h != last_rh_) {
+        lv_obj_set_height(left_eye_, left_h);
+        lv_obj_set_height(right_eye_, right_h);
+    }
+
+    // ==========================================
+    // HANDLE POSISI (LIRIK & BOUNCE)
+    // ==========================================
+    look_x_ += (target_look_x_ - look_x_) * 0.2f;
+    look_y_ += (target_look_y_ - look_y_) * 0.2f;
+    
+    int ox = std::clamp((int)look_x_, -6, 6);
+    int oy = std::clamp((int)look_y_, -3, 3);
+
+    // Gabungkan posisi lirik dengan efek pantulan suara (bounce_y)
+    int final_oy = oy + bounce_y;
+
+    if (ox != last_ox_ || final_oy != last_oy_) {
+        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, -4 + final_oy);
+        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, -4 + final_oy);
+        last_ox_ = ox;
+        last_oy_ = final_oy;
     }
 }
