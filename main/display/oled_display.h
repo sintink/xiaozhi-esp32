@@ -22,34 +22,28 @@ private:
     lv_obj_t* left_eye_ = nullptr;
     lv_obj_t* right_eye_ = nullptr;
     lv_obj_t* mouth_ = nullptr;
-    lv_obj_t* z_label_ = nullptr;
     lv_obj_t* subtitle_label_ = nullptr;
     lv_timer_t* face_timer_ = nullptr;
 
-    // Ukuran mata (mochi)
-    static constexpr int kEyeSize = 20;
-    static constexpr int kEyeOffset = 28;
-
-    // Posisi lirik
-    float look_x_ = 0.f;
-    float look_y_ = 0.f;
+    // Variabel Animasi
+    int eye_size_ = 18;
+    int eye_offset_ = 28;
+    
+    float look_x_ = 0;
+    float look_y_ = 0;
     int target_look_x_ = 0;
     int target_look_y_ = 0;
 
-    // State
-    int face_state_ = 0;   // 0=idle, 1=listening, 2=speaking
-    int sleep_state_ = 0;  // 0=normal, 1=ngantuk, 2=tidur, 3=kaget
-
-    // Timer (pakai int64_t agar tidak overflow)
-    int64_t last_activity_us_ = 0;
-    int64_t next_blink_us_ = 0;
-    int64_t blink_start_us_ = 0;
-    int64_t next_look_us_ = 0;
     bool is_blinking_ = false;
+    unsigned long blink_start_ = 0;
+    unsigned long next_blink_ = 3000;
+    unsigned long next_look_ = 4000;
+
+    int current_emotion_ = 0; // 0=Normal, 1=Happy, 2=Sleepy, 3=Surprised, 4=Angry
 
     void InitEyes();
     void UpdateFace();
-    void ApplyEyeExpression(int expression);  // 0=normal,1=happy,2=sleepy,3=sleep,4=surprised
+    void ApplyEyeShape(int emotion);
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
@@ -63,7 +57,7 @@ public:
 
     virtual void SetupUI() override;
     virtual void SetChatMessage(const char* role, const char* content) override;
-    virtual void ClearChatMessages() override;
+    virtual void ClearChatMessages() override; 
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetTheme(Theme* theme) override;
     virtual bool IsMonochrome() const override { return true; }
