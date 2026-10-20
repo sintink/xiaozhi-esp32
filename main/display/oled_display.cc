@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <string>
-#include <cstring> // Buat strcmp
 
 #include <esp_err.h>
 #include <esp_log.h>
@@ -46,7 +45,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     ESP_LOGI(TAG, "Initialize LVGL");
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     port_cfg.task_priority = 1;
-    port_cfg.task_stack = 10240; // DINAIKIN JADI 10KB BIAR AMAN DARI STACK OVERFLOW
+    port_cfg.task_stack = 6144;
 #if CONFIG_SOC_CPU_CORES_NUM > 1
     port_cfg.task_affinity = 1;
 #endif
@@ -118,11 +117,11 @@ OledDisplay::~OledDisplay() {
         lv_obj_del(content_);
     }
 
-    if (face_timer_ != nullptr) {
-        lv_timer_del(face_timer_);
-        face_timer_ = nullptr;
-    }
-    
+  if (face_timer_ != nullptr) {
+    lv_timer_del(face_timer_);
+    face_timer_ = nullptr;
+  }
+  
     bool is_128x64_layout = (top_bar_ != nullptr);
     if (status_bar_ != nullptr && is_128x64_layout) {
         status_label_ = nullptr;
@@ -202,7 +201,8 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_border_width(right_icons, 0, 0);
     lv_obj_set_style_pad_all(right_icons, 0, 0);
     lv_obj_set_flex_flow(right_icons, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(right_icons, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(right_icons, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
 
     mute_label_ = lv_label_create(right_icons);
     lv_label_set_text(mute_label_, "");
@@ -272,7 +272,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_size(right_eye_, eye_size, eye_size);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset, -4);
 
-    /* Mulut */
+    /* Mulut (opsional, kecil di bawah) */
     mouth_ = lv_obj_create(face_container_);
     lv_obj_set_style_bg_color(mouth_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(mouth_, LV_OPA_COVER, 0);
@@ -281,7 +281,9 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_size(mouth_, 20, 4);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 16);
 
-    /* Subtitle label */
+    InitEyes();
+
+    /* Subtitle label (overlay di content_, hidden default) */
     subtitle_label_ = lv_label_create(content_);
     lv_obj_set_width(subtitle_label_, LV_HOR_RES - 4);
     lv_label_set_long_mode(subtitle_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -289,13 +291,6 @@ void OledDisplay::SetupUI_128x64() {
     lv_label_set_text(subtitle_label_, "");
     lv_obj_align(subtitle_label_, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
-
-    /* Label Z untuk Tidur */
-    z_label_ = lv_label_create(content_);
-    lv_label_set_text(z_label_, "Z");
-    lv_obj_set_style_text_font(z_label_, text_font, 0);
-    lv_obj_align(z_label_, LV_ALIGN_TOP_RIGHT, -10, 5);
-    lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
 
     /* Low battery popup */
     low_battery_popup_ = lv_obj_create(screen);
@@ -309,36 +304,28 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
-
-    // Init Waktu dan Timer
-    last_activity_time_ = esp_timer_get_time() / 1000; 
-    InitEyes(); 
 }
 
-// Fungsi TANPA LOCK (Aman dipanggil dari Timer)
-void OledDisplay::ApplyEyeSize(const char* emotion) {
+void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr || left_eye_ == nullptr) return;
 
-    if (strcmp(emotion, "happy") == 0) {
+    DisplayLockGuard lock(this);
+    std::string e(emotion);
+
+    if (e == "happy" || e == "laughing") {
         lv_obj_set_size(left_eye_, eye_size + 4, eye_size - 6);
         lv_obj_set_size(right_eye_, eye_size + 4, eye_size - 6);
-        lv_obj_set_style_radius(left_eye_, 15, 0);
-        lv_obj_set_style_radius(right_eye_, 15, 0);
-    } else if (strcmp(emotion, "surprised") == 0) {
+    } else if (e == "sad" || e == "crying") {
+        lv_obj_set_size(left_eye_, eye_size - 2, eye_size - 4);
+        lv_obj_set_size(right_eye_, eye_size - 2, eye_size - 4);
+        lv_obj_set_style_radius(left_eye_, 6, 0);
+        lv_obj_set_style_radius(right_eye_, 6, 0);
+    } else if (e == "surprised") {
         lv_obj_set_size(left_eye_, eye_size + 6, eye_size + 6);
         lv_obj_set_size(right_eye_, eye_size + 6, eye_size + 6);
-        lv_obj_set_style_radius(left_eye_, 20, 0);
-        lv_obj_set_style_radius(right_eye_, 20, 0);
-    } else if (strcmp(emotion, "sleepy") == 0) {
-        lv_obj_set_size(left_eye_, eye_size, eye_size / 2);
-        lv_obj_set_size(right_eye_, eye_size, eye_size / 2);
-        lv_obj_set_style_radius(left_eye_, 0, 0);
-        lv_obj_set_style_radius(right_eye_, 0, 0);
-    } else if (strcmp(emotion, "sleep") == 0) {
-        lv_obj_set_size(left_eye_, eye_size, 2);
-        lv_obj_set_size(right_eye_, eye_size, 2);
-        lv_obj_set_style_radius(left_eye_, 0, 0);
-        lv_obj_set_style_radius(right_eye_, 0, 0);
+    } else if (e == "angry") {
+        lv_obj_set_size(left_eye_, eye_size + 2, eye_size - 4);
+        lv_obj_set_size(right_eye_, eye_size + 2, eye_size - 4);
     } else {
         lv_obj_set_size(left_eye_, eye_size, eye_size);
         lv_obj_set_size(right_eye_, eye_size, eye_size);
@@ -347,17 +334,12 @@ void OledDisplay::ApplyEyeSize(const char* emotion) {
     }
 }
 
-// Fungsi DENGAN LOCK (Aman dipanggil dari luar Timer)
-void OledDisplay::SetEmotion(const char* emotion) {
-    if (emotion == nullptr || left_eye_ == nullptr) return;
-    DisplayLockGuard lock(this); 
-    ApplyEyeSize(emotion);
-}
-
 void OledDisplay::SetTheme(Theme* theme) {
     DisplayLockGuard lock(this);
+
     auto lvgl_theme = static_cast<LvglTheme*>(theme);
     auto text_font = lvgl_theme->text_font()->font();
+
     auto screen = lv_screen_active();
     lv_obj_set_style_text_font(screen, text_font, 0);
 }
@@ -377,7 +359,7 @@ void OledDisplay::InitEyes() {
     face_timer_ = lv_timer_create([](lv_timer_t* t) {
         OledDisplay* self = (OledDisplay*)lv_timer_get_user_data(t);
         self->UpdateFace();
-    }, 50, this); 
+    }, 50, this);   // update tiap 50ms
 }
 
 void OledDisplay::ClearChatMessages() {
@@ -389,35 +371,23 @@ void OledDisplay::ClearChatMessages() {
 
 void OledDisplay::SetFaceState(int state) {
     DisplayLockGuard lock(this);
-    
-    // Reset timer aktivitas biar dia bangun
-    last_activity_time_ = esp_timer_get_time() / 1000; 
-
-    // Kalau sebelumnya lagi tidur/ngantuk, set state kaget
-    if (sleep_state_ == 1 || sleep_state_ == 2) {
-        sleep_state_ = 3; 
-    } else {
-        sleep_state_ = 0;
-    }
-    
-    if (z_label_ != nullptr) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
 
     if (face_state_ != state) {
         face_state_ = state;
+        next_look = 0;
     }
 
     if (state == 0) {
+        // Idle → mata full, subtitle hidden
         if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
         if (subtitle_label_) {
             lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
             lv_label_set_text(subtitle_label_, "");
         }
     } else {
-        // Jangan langsung hilangin muka kalau lagi kaget (biar keliatan 0.5 detik)
-        if (sleep_state_ != 3) {
-            if (face_container_) lv_obj_add_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
-            if (subtitle_label_) lv_obj_clear_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
-        }
+        // Listening/Speaking → mata hidden, subtitle tampil
+        if (face_container_) lv_obj_add_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
+        if (subtitle_label_) lv_obj_clear_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -426,98 +396,71 @@ void OledDisplay::UpdateFace() {
 
     unsigned long now = esp_timer_get_time() / 1000;
 
-    // --- LOGIKA STATE (TIDUR, NGANTUK, KAGET) ---
-    if (face_state_ == 0) { // Mode Idle
-        if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
-        if (subtitle_label_) lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
+    /* --- Smooth lerp gerakan mata --- */
+    current_look_x += (target_look_x - current_look_x) * 0.15f;
+    current_look_y += (target_look_y - current_look_y) * 0.15f;
 
-        unsigned long idle_time = now - last_activity_time_;
-        
-        if (sleep_state_ == 3) {
-            // EFEK KAGET (500ms)
-            ApplyEyeSize("surprised");
-            if (idle_time > 500) sleep_state_ = 0;
-        } 
-        else if (idle_time > 60000) {
-            if (sleep_state_ != 2) {
-                sleep_state_ = 2;
-                ApplyEyeSize("sleep");
-                if (z_label_) lv_obj_clear_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-            }
-        } 
-        else if (idle_time > 30000) {
-            if (sleep_state_ != 1) {
-                sleep_state_ = 1;
-                ApplyEyeSize("sleepy");
-                if (z_label_) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-            }
-        } 
-        else {
-            if (sleep_state_ != 0) {
-                sleep_state_ = 0;
-                ApplyEyeSize("normal");
-                if (z_label_) lv_obj_add_flag(z_label_, LV_OBJ_FLAG_HIDDEN);
-            }
-        }
-    } else {
-        // Mode Listening / Speaking
-        if (sleep_state_ == 3) {
-            // Kaget pas mau dengerin
-            ApplyEyeSize("surprised");
-            if (face_container_) lv_obj_clear_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
-            if (subtitle_label_) lv_obj_add_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
-            
-            if (now - last_activity_time_ > 500) {
-                sleep_state_ = 0;
-                if (face_container_) lv_obj_add_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
-                if (subtitle_label_) lv_obj_clear_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
-            }
+    int ox = (int)current_look_x;
+    int oy = (int)current_look_y;
+    if (ox < -5) ox = -5;
+    if (ox > 5) ox = 5;
+    if (oy < -3) oy = -3;
+    if (oy > 3) oy = 3;
+
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset + ox, -4 + oy);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset + ox, -4 + oy);
+
+    /* --- Trigger look baru --- */
+    static unsigned long last_look = 0;
+    if (now - last_look > next_look) {
+        last_look = now;
+
+        if (face_state_ == 1) {
+            // Listening — fokus ke tengah
+            target_look_x = 0;
+            target_look_y = 0;
+            next_look = 2000;
+        } else if (face_state_ == 2) {
+            // Speaking — gerak ringan
+            next_look = 1000 + (esp_random() % 1500);
+            target_look_x = (int)(esp_random() % 5) - 2;
+            target_look_y = (int)(esp_random() % 3) - 1;
         } else {
-            // Mode normal
-            last_activity_time_ = now; // Terus reset waktu selama dipake
-            if (face_container_) lv_obj_add_flag(face_container_, LV_OBJ_FLAG_HIDDEN);
-            if (subtitle_label_) lv_obj_clear_flag(subtitle_label_, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-
-    // --- LOGIKA KEDIP & LIRIK (Cuma jalan kalau melek & diem) ---
-    if (face_state_ == 0 && sleep_state_ == 0) {
-        static unsigned long last_blink = 0;
-        if (!is_blinking && now - last_blink > next_blink) {
-            is_blinking = true;
-            blink_start = now;
-            last_blink = now;
-            next_blink = 2500 + (esp_random() % 2500);
-        }
-
-        if (is_blinking) {
-            unsigned long elapsed = now - blink_start;
-            int h = eye_size;
-            if (elapsed < 80) {
-                h = eye_size - (elapsed * (eye_size - 2) / 80);
-            } else if (elapsed < 160) {
-                h = 2 + ((elapsed - 80) * (eye_size - 2) / 80);
-            } else {
-                is_blinking = false;
-            }
-            lv_obj_set_height(left_eye_, h);
-            lv_obj_set_height(right_eye_, h);
-        }
-
-        // --- Lirik Mata Acak ---
-        static unsigned long last_look_time = 0;
-        if (now - last_look_time > next_look) {
-            last_look_time = now;
+            // Idle — lirik random
             next_look = 2000 + (esp_random() % 3000);
             target_look_x = (int)(esp_random() % 9) - 4;
             target_look_y = (int)(esp_random() % 5) - 2;
         }
-        
-        current_look_x += (target_look_x - current_look_x) * 0.15f;
-        current_look_y += (target_look_y - current_look_y) * 0.15f;
-        int ox = (int)current_look_x;
-        int oy = (int)current_look_y;
-        lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset + ox, -4 + oy);
-        lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset + ox, -4 + oy);
+    }
+
+    /* --- Blink --- */
+    static unsigned long last_blink = 0;
+    if (!is_blinking && now - last_blink > next_blink) {
+        is_blinking = true;
+        blink_start = now;
+        last_blink = now;
+
+        if (face_state_ == 1) {
+            // Listening — jarang kedip
+            next_blink = 5000 + (esp_random() % 3000);
+        } else {
+            // Idle & Speaking — normal
+            next_blink = 2500 + (esp_random() % 2500);
+        }
+    }
+
+    if (is_blinking) {
+        unsigned long elapsed = now - blink_start;
+        int h = eye_size;
+        if (elapsed < 80) {
+            h = eye_size - (elapsed * (eye_size - 2) / 80);
+        } else if (elapsed < 160) {
+            h = 2 + ((elapsed - 80) * (eye_size - 2) / 80);
+        } else {
+            is_blinking = false;
+            h = eye_size;
+        }
+        lv_obj_set_height(left_eye_, h);
+        lv_obj_set_height(right_eye_, h);
     }
 }
