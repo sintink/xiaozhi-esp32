@@ -107,12 +107,9 @@ bool OledDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 void OledDisplay::Unlock() { lvgl_port_unlock(); }
 
 void OledDisplay::SetupUI_128x64() {
-    DisplayLockGuard lock(this);
+    DisplayGuard lock(this);
 
     auto screen = lv_screen_active();
-    
-    // FIX WARNA KEBALIK: Background pakai WHITE, Mata pakai BLACK.
-    // Ini akan menghasilkan layar Hitam dengan Mata Putih di OLED kamu.
     lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
 
@@ -134,7 +131,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_bg_opa(face_container_, LV_OPA_TRANSP, 0);
     lv_obj_center(face_container_);
 
-    /* === MATA KIRI (Ukuran 36px) === */
+    /* === MATA KIRI === */
     left_eye_ = lv_obj_create(face_container_);
     lv_obj_set_style_bg_color(left_eye_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(left_eye_, LV_OPA_COVER, 0);
@@ -145,7 +142,16 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_transform_pivot_x(left_eye_, 18, 0);
     lv_obj_set_style_transform_pivot_y(left_eye_, 18, 0);
 
-    /* === MATA KANAN (Ukuran 36px) === */
+    // TITIK FOKUS (PUPIL)
+    left_pupil_ = lv_obj_create(left_eye_);
+    lv_obj_set_style_bg_color(left_pupil_, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(left_pupil_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(left_pupil_, 0, 0);
+    lv_obj_set_style_radius(left_pupil_, 2, 0);
+    lv_obj_set_size(left_pupil_, 8, 8);
+    lv_obj_align(left_pupil_, LV_ALIGN_CENTER, 0, 0);
+
+    /* === MATA KANAN === */
     right_eye_ = lv_obj_create(face_container_);
     lv_obj_set_style_bg_color(right_eye_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(right_eye_, LV_OPA_COVER, 0);
@@ -156,6 +162,15 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_transform_pivot_x(right_eye_, 18, 0);
     lv_obj_set_style_transform_pivot_y(right_eye_, 18, 0);
 
+    // TITIK FOKUS (PUPIL)
+    right_pupil_ = lv_obj_create(right_eye_);
+    lv_obj_set_style_bg_color(right_pupil_, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(right_pupil_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(right_pupil_, 0, 0);
+    lv_obj_set_style_radius(right_pupil_, 2, 0);
+    lv_obj_set_size(right_pupil_, 8, 8);
+    lv_obj_align(right_pupil_, LV_ALIGN_CENTER, 0, 0);
+
     InitEyes();
 }
 
@@ -164,12 +179,12 @@ void OledDisplay::InitEyes() {
     face_timer_ = lv_timer_create([](lv_timer_t* t) {
         OledDisplay* self = (OledDisplay*)lv_timer_get_user_data(t);
         if (self) self->UpdateFace();
-    }, 50, this);
+    }, 40, this);
 }
 
 void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr) return;
-    DisplayLockGuard lock(this);
+    DisplayGuard lock(this);
 
     if (strcmp(emotion, "happy") == 0) current_emotion_ = 1;
     else if (strcmp(emotion, "sleepy") == 0) current_emotion_ = 3;
@@ -177,6 +192,9 @@ void OledDisplay::SetEmotion(const char* emotion) {
     else if (strcmp(emotion, "angry") == 0) current_emotion_ = 2;
     else if (strcmp(emotion, "sad") == 0) current_emotion_ = 5;
     else current_emotion_ = 0;
+
+    ai_emotion_active_ = true;
+    ai_emotion_timeout_ = (esp_timer_get_time() / 1000) + 3000; 
 }
 
 void OledDisplay::SetTheme(Theme* theme) {}
@@ -192,156 +210,197 @@ void OledDisplay::SetPowerSaveMode(bool on) {
 }
 
 void OledDisplay::SetFaceState(int state) {
-    DisplayLockGuard lock(this);
-    anim_state_ = state;
+    DisplayGuard lock(this);
+    if (anim_state_ != state) {
+        anim_state_ = state;
+        is_blinking_ = false;
+        wink_eye_ = 0;
+        next_look_ = 0; 
+    }
 }
 
-// Fungsi pembantu bentuk mata (Diperbesar)
-void OledDisplay::ApplyExpression(int emote, int breath, int bounce_y) {
-    int w = 36, h = 36, r = 6;
-    int angle_l = 0, angle_r = 0;
-
+void OledDisplay::UpdateTargetShape(int emote) {
     switch (emote) {
-        case 0: w = 36; h = 36; r = 6; angle_l = 0; angle_r = 0; break; // Neutral (Kotak besar)
-        case 1: w = 40; h = 20; r = LV_RADIUS_CIRCLE; angle_l = 0; angle_r = 0; break; // Happy (Sipit lebar)
-        case 2: w = 38; h = 16; r = 0; angle_l = 200; angle_r = -200; break; // Angry (Miring tajam)
-        case 3: w = 36; h = 6; r = 3; angle_l = 0; angle_r = 0; break; // Sleepy (Garis tipis)
-        case 4: w = 44; h = 44; r = 8; angle_l = 0; angle_r = 0; break; // Surprised (Bulat besar)
-        case 5: w = 38; h = 16; r = 0; angle_l = -200; angle_r = 200; break; // Sad (Miring turun)
-    }
-
-    w += breath;
-    h += breath;
-
-    if (w != last_w_ || h != last_lh_ || r != last_radius_ || angle_l != last_angle_l_) {
-        lv_obj_set_size(left_eye_, w, h);
-        lv_obj_set_size(right_eye_, w, h);
-        lv_obj_set_style_radius(left_eye_, r, 0);
-        lv_obj_set_style_radius(right_eye_, r, 0);
-        
-        lv_obj_set_style_transform_pivot_x(left_eye_, w/2, 0);
-        lv_obj_set_style_transform_pivot_y(left_eye_, h/2, 0);
-        lv_obj_set_style_transform_pivot_x(right_eye_, w/2, 0);
-        lv_obj_set_style_transform_pivot_y(right_eye_, h/2, 0);
-
-        lv_obj_set_style_transform_angle(left_eye_, angle_l, 0);
-        lv_obj_set_style_transform_angle(right_eye_, angle_r, 0);
-
-        last_w_ = w;
-        last_lh_ = h;
-        last_rh_ = h;
-        last_radius_ = r;
-        last_angle_l_ = angle_l;
-        last_angle_r_ = angle_r;
+        case 0: target_w_ = 36; target_h_ = 36; target_r_ = 6; target_angle_l_ = 0; target_angle_r_ = 0; break;
+        case 1: target_w_ = 40; target_h_ = 20; target_r_ = LV_RADIUS_CIRCLE; target_angle_l_ = 0; target_angle_r_ = 0; break; 
+        case 2: target_w_ = 38; target_h_ = 16; target_r_ = 0; target_angle_l_ = 200; target_angle_r_ = -200; break; 
+        case 3: target_w_ = 36; target_h_ = 8; target_r_ = 4; target_angle_l_ = 0; target_angle_r_ = 0; break; 
+        case 4: target_w_ = 44; target_h_ = 44; target_r_ = 8; target_angle_l_ = 0; target_angle_r_ = 0; break; 
+        case 5: target_w_ = 38; target_h_ = 16; target_r_ = 0; target_angle_l_ = -200; target_angle_r_ = 200; break; 
     }
 }
 
 void OledDisplay::UpdateFace() {
     if (left_eye_ == nullptr || right_eye_ == nullptr) return;
-
     if (esp_timer_get_time() - boot_time_us_ < 8000000LL) return; 
 
     int64_t now = esp_timer_get_time() / 1000;
-    int breath = (int)(sin(now / 300.0) * 1.5);
     int bounce_y = 0;
+
+    // 1. LOGIKA STATE & EMOSI (PRIORITAS)
+    if (ai_emotion_active_ && now > ai_emotion_timeout_) {
+        ai_emotion_active_ = false; 
+        if (anim_state_ == 0) current_emotion_ = 0; 
+    }
 
     if (anim_state_ == 0) {
         // === IDLE ===
-        if (now > next_emote_change_) {
+        if (!ai_emotion_active_ && now > next_emote_change_) {
             current_emotion_ = esp_random() % 6; 
             next_emote_change_ = now + 3000 + (esp_random() % 4000);
         }
-        if (now > next_look_) {
-            target_look_x_ = (esp_random() % 11) - 5; 
-            target_look_y_ = (esp_random() % 7) - 3;  
-            next_look_ = now + 1500 + (esp_random() % 2000);
-        }
         
+        // Fitur Saccade: Lirikan mata nge-jeg (langsung), bukan melayang pelan
+        if (now > next_look_) {
+            target_look_x_ = (esp_random() % 13) - 6; 
+            target_look_y_ = (esp_random() % 7) - 3;  
+            next_look_ = now + 1500 + (esp_random() % 2500);
+            
+            // Kadang fokus ke depan sejenak sebelum lirik lagi
+            if (esp_random() % 3 == 0) {
+                target_look_x_ = 0;
+                target_look_y_ = 0;
+            }
+        }
+
+        // Fitur Double Blink (Kedip 2x)
         if (!is_blinking_ && now > next_blink_) {
-            is_blinking_ = true;
+            is_blinking_ = true; 
             blink_start_ = now;
-            next_blink_ = now + 3000 + (esp_random() % 3000); 
+            is_double_blinking_ = (esp_random() % 4 == 0); // 25% peluang double blink
+            
+            if (is_double_blinking_) {
+                next_blink_ = now + 400; // Kedipan kedua menyusul cepat
+            } else {
+                next_blink_ = now + 3000 + (esp_random() % 3000); 
+            }
         }
 
         if (wink_eye_ == 0 && now > next_wink_) {
-            wink_eye_ = (esp_random() % 2) + 1; 
-            wink_start_ = now;
+            wink_eye_ = (esp_random() % 2) + 1; wink_start_ = now;
             next_wink_ = now + 6000 + (esp_random() % 5000);
         }
     } 
     else if (anim_state_ == 1) {
         // === LISTENING ===
-        target_look_x_ = 0;
-        target_look_y_ = 0;
-        current_emotion_ = 0; 
-        
+        target_look_x_ = 0; target_look_y_ = 0;
+        if (!ai_emotion_active_) current_emotion_ = 0; 
         if (!is_blinking_ && now > next_blink_) {
-            is_blinking_ = true;
-            blink_start_ = now;
+            is_blinking_ = true; blink_start_ = now;
             next_blink_ = now + 4000 + (esp_random() % 3000); 
         }
     } 
     else if (anim_state_ == 2) {
         // === SPEAKING ===
-        target_look_x_ = 0;
-        target_look_y_ = 0;
+        target_look_x_ = 0; target_look_y_ = 0;
         
-        // Pantulan lebih besar dan cepat untuk efek bicara
-        bounce_y = (int)(sin(now / 40.0) * 4.0); 
-        
-        if (now > next_emote_change_) {
+        float wave1 = sin(now / 40.0);
+        float wave2 = sin(now / 13.0);
+        bounce_y = (int)((wave1 * 0.7 + wave2 * 0.3) * 4.0);
+
+        if (!ai_emotion_active_ && now > next_emote_change_) {
             int r = esp_random() % 3;
-            if (r == 0) current_emotion_ = 1;
-            else if (r == 1) current_emotion_ = 0;
-            else current_emotion_ = 4;
-            
+            current_emotion_ = (r == 0) ? 1 : ((r == 1) ? 0 : 4); 
             next_emote_change_ = now + 1000 + (esp_random() % 1500);
         }
     }
 
-    ApplyExpression(current_emotion_, breath, bounce_y);
+    // 2. LERP (TRANSISI HALUS)
+    UpdateTargetShape(current_emotion_);
+    
+    current_w_ += (target_w_ - current_w_) * 0.2f;
+    current_h_ += (target_h_ - current_h_) * 0.2f;
+    current_r_ += (target_r_ - current_r_) * 0.2f;
+    current_angle_l_ += (target_angle_l_ - current_angle_l_) * 0.2f;
+    current_angle_r_ += (target_angle_r_ - current_angle_r_) * 0.2f;
 
-    int left_h = last_lh_;
-    int right_h = last_rh_;
+    // 3. KEDIP & WINK
+    float blink_mult = 1.0f;
+    float wink_l_mult = 1.0f;
+    float wink_r_mult = 1.0f;
 
     if (is_blinking_) {
         int64_t elapsed = now - blink_start_;
-        if (elapsed < 80) {
-            left_h = right_h = last_lh_ - (elapsed * (last_lh_ - 2) / 80);
-        } else if (elapsed < 160) {
-            left_h = right_h = 2 + ((elapsed - 80) * (last_lh_ - 2) / 80);
-        } else {
-            is_blinking_ = false;
-        }
+        if (elapsed < 60) blink_mult = 1.0f - ((float)elapsed / 60.0f);
+        else if (elapsed < 140) blink_mult = (float)(elapsed - 60) / 80.0f;
+        else is_blinking_ = false;
     }
 
     if (wink_eye_ != 0) {
         int64_t elapsed = now - wink_start_;
         if (elapsed < 200) {
-            if (wink_eye_ == 1) left_h = 2;
-            if (wink_eye_ == 2) right_h = 2;
+            if (wink_eye_ == 1) wink_l_mult = 0.1f;
+            if (wink_eye_ == 2) wink_r_mult = 0.1f;
         } else {
             wink_eye_ = 0;
         }
     }
 
-    if (left_h != last_lh_ || right_h != last_rh_) {
-        lv_obj_set_height(left_eye_, left_h);
-        lv_obj_set_height(right_eye_, right_h);
+    int final_lh = (int)(current_h_ * blink_mult * wink_l_mult);
+    int final_rh = (int)(current_h_ * blink_mult * wink_r_mult);
+
+    // 4. LIRIK, SACCADE & FLOATING (NAIK-TURUN HALUS)
+    // Lirik lebih cepat (0.5) agar terasa nge-jeg seperti manusia
+    look_x_ += (target_look_x_ - look_x_) * 0.5f;
+    look_y_ += (target_look_y_ - look_y_) * 0.5f;
+    
+    // Efek mengambang (floating) di Idle
+    if (anim_state_ == 0 && !is_blinking_) {
+        float_y_ = sin(now / 800.0) * 1.5f; // Naik turun 1.5 px santai
+    } else {
+        float_y_ *= 0.9f; // Kembali ke tengah saat mendengarkan/bicara
+    }
+    
+    int ox = std::clamp((int)look_x_, -8, 8);
+    int oy = std::clamp((int)look_y_, -4, 4);
+    int final_oy = oy + bounce_y + (int)float_y_;
+
+    // 5. RENDER KE LVGL (ANTI-WATCHDOG)
+    int draw_w = (int)current_w_;
+    int draw_r = (int)current_r_;
+    int draw_al = (int)current_angle_l_;
+    int draw_ar = (int)current_angle_r_;
+
+    if (std::abs(draw_w - last_drawn_w_) > 0 || 
+        std::abs(final_lh - last_drawn_lh_) > 0 || 
+        std::abs(final_rh - last_drawn_rh_) > 0) {
+        
+        lv_obj_set_size(left_eye_, draw_w, final_lh);
+        lv_obj_set_size(right_eye_, draw_w, final_rh);
+        lv_obj_set_style_radius(left_eye_, draw_r, 0);
+        lv_obj_set_style_radius(right_eye_, draw_r, 0);
+        
+        lv_obj_set_style_transform_pivot_x(left_eye_, draw_w/2, 0);
+        lv_obj_set_style_transform_pivot_y(left_eye_, final_lh/2, 0);
+        lv_obj_set_style_transform_pivot_x(right_eye_, draw_w/2, 0);
+        lv_obj_set_style_transform_pivot_y(right_eye_, final_rh/2, 0);
+
+        last_drawn_w_ = draw_w;
+        last_drawn_lh_ = final_lh;
+        last_drawn_rh_ = final_rh;
     }
 
-    look_x_ += (target_look_x_ - look_x_) * 0.2f;
-    look_y_ += (target_look_y_ - look_y_) * 0.2f;
-    
-    int ox = std::clamp((int)look_x_, -6, 6);
-    int oy = std::clamp((int)look_y_, -3, 3);
+    if (std::abs(draw_al - last_drawn_angle_l_) > 0 || 
+        std::abs(draw_ar - last_drawn_angle_r_) > 0) {
+        
+        lv_obj_set_style_transform_angle(left_eye_, draw_al, 0);
+        lv_obj_set_style_transform_angle(right_eye_, draw_ar, 0);
+        
+        last_drawn_angle_l_ = draw_al;
+        last_drawn_angle_r_ = draw_ar;
+    }
 
-    int final_oy = oy + bounce_y;
-
-    if (ox != last_ox_ || final_oy != last_oy_) {
+    if (ox != last_drawn_ox_ || final_oy != last_drawn_oy_) {
         lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, -2 + final_oy);
         lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, -2 + final_oy);
-        last_ox_ = ox;
-        last_oy_ = final_oy;
+        
+        last_drawn_ox_ = ox;
+        last_drawn_oy_ = final_oy;
+
+        // PUPIL BERGERAK BERLAWANAN ARAH AGAR TERLIHAT 3D (Parallax)
+        int pupil_ox = std::clamp((int)(ox * -0.3f), -2, 2);
+        int pupil_oy = std::clamp((int)(final_oy * -0.3f), -2, 2);
+        lv_obj_align(left_pupil_, LV_ALIGN_CENTER, pupil_ox, pupil_oy);
+        lv_obj_align(right_pupil_, LV_ALIGN_CENTER, pupil_ox, pupil_oy);
     }
 }
