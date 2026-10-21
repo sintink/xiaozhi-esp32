@@ -22,6 +22,7 @@ private:
     lv_obj_t* left_pupil_ = nullptr;   // Tambahan titik fokus
     lv_obj_t* right_pupil_ = nullptr;
     lv_timer_t* face_timer_ = nullptr;
+    lv_obj_t* mouth_ = nullptr;
 
     int64_t boot_time_us_ = 0;
 
