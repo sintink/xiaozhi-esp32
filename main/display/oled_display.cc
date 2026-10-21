@@ -107,7 +107,7 @@ bool OledDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 void OledDisplay::Unlock() { lvgl_port_unlock(); }
 
 void OledDisplay::SetupUI_128x64() {
-    DisplayGuard lock(this);
+    DisplayLockGuard lock(this);
 
     auto screen = lv_screen_active();
     lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
@@ -184,7 +184,7 @@ void OledDisplay::InitEyes() {
 
 void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr) return;
-    DisplayGuard lock(this);
+    DisplayLockGuard lock(this);
 
     if (strcmp(emotion, "happy") == 0) current_emotion_ = 1;
     else if (strcmp(emotion, "sleepy") == 0) current_emotion_ = 3;
@@ -212,7 +212,7 @@ void OledDisplay::SetPowerSaveMode(bool on) {
 }
 
 void OledDisplay::SetFaceState(int state) {
-    DisplayGuard lock(this);
+    DisplayLockGuard lock(this);
     if (anim_state_ != state) {
         anim_state_ = state;
         is_blinking_ = false;
