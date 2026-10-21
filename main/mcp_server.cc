@@ -259,6 +259,74 @@ AddTool("self.music.play",
             return true;
         });
 
+    // ─── Tool: Get Weather dari STB ───
+    AddTool("self.weather.get",
+            "Ambil informasi cuaca terkini dan prediksi untuk wilayah pengguna. "
+            "Gunakan tool ini jika user bertanya tentang cuaca, suhu, hujan, atau kondisi langit.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                // 1. Dapatkan IP STB
+                std::string stb_ip = GetStbIpAuto();
+                std::string url = "http://" + stb_ip + "/api/cuaca.php";
+                
+                ESP_LOGI(TAG, "Request cuaca ke: %s", url.c_str());
+
+                auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+                if (!http) {
+                    ESP_LOGE(TAG, "Gagal buat HTTP client");
+                    return false;
+                }
+
+                if (auto opened = http->Open("GET", url); !opened) {
+                    ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
+                    return false;
+                }
+
+                if (auto status = http->GetStatusCode(); !status || *status != 200) {
+                    ESP_LOGE(TAG, "STB error status cuaca: %d", status ? *status : -1);
+                    http->Close();
+                    return false;
+                }
+
+                std::string response = http->ReadAll();
+                http->Close();
+
+                // 2. Parse JSON dari STB
+                cJSON* root = cJSON_Parse(response.c_str());
+                if (!root) {
+                    ESP_LOGE(TAG, "Gagal parse JSON cuaca");
+                    return false;
+                }
+
+                // 3. Ambil teks
+                auto speech_text = cJSON_GetObjectItem(root, "speech_text");
+                auto display_text = cJSON_GetObjectItem(root, "display_text");
+                auto prediksi_text = cJSON_GetObjectItem(root, "prediksi_text");
+                
+                std::string result_text = "";
+                
+                if (cJSON_IsString(speech_text) && speech_text->valuestring[0] != '\0') {
+                    result_text = speech_text->valuestring;
+                } else if (cJSON_IsString(display_text) && display_text->valuestring[0] != '\0') {
+                    result_text = display_text->valuestring;
+                }
+                
+                if (cJSON_IsString(prediksi_text) && prediksi_text->valuestring[0] != '\0') {
+                    result_text += " Prediksi: " + std::string(prediksi_text->valuestring);
+                }
+
+                cJSON_Delete(root);
+
+                if (result_text.empty()) {
+                    result_text = "Data cuaca saat ini tidak tersedia.";
+                }
+
+                ESP_LOGI(TAG, "Hasil cuaca: %s", result_text.c_str());
+                return result_text;
+            });
+
+// Taro disni ketika tanbah tool baru
+
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), std::make_move_iterator(original_tools.begin()),
                   std::make_move_iterator(original_tools.end()));
