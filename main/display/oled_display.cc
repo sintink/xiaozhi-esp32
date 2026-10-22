@@ -131,7 +131,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_bg_opa(face_container_, LV_OPA_TRANSP, 0);
     lv_obj_center(face_container_);
 
-    /* === MATA KIRI (Bentuk Kapsul Mochi) === */
+    /* === MATA KIRI (Bersih tanpa pupil) === */
     left_eye_ = lv_obj_create(face_container_);
     lv_obj_set_style_bg_color(left_eye_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(left_eye_, LV_OPA_COVER, 0);
@@ -140,15 +140,7 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_size(left_eye_, 32, 36);
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_, -4);
 
-    left_pupil_ = lv_obj_create(left_eye_);
-    lv_obj_set_style_bg_color(left_pupil_, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(left_pupil_, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(left_pupil_, 0, 0);
-    lv_obj_set_style_radius(left_pupil_, 3, 0);
-    lv_obj_set_size(left_pupil_, 7, 7);
-    lv_obj_align(left_pupil_, LV_ALIGN_CENTER, 0, 0);
-
-    /* === MATA KANAN (Bentuk Kapsul Mochi) === */
+    /* === MATA KANAN (Bersih tanpa pupil) === */
     right_eye_ = lv_obj_create(face_container_);
     lv_obj_set_style_bg_color(right_eye_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(right_eye_, LV_OPA_COVER, 0);
@@ -156,14 +148,6 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_radius(right_eye_, 14, 0);
     lv_obj_set_size(right_eye_, 32, 36);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_, -4);
-
-    right_pupil_ = lv_obj_create(right_eye_);
-    lv_obj_set_style_bg_color(right_pupil_, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(right_pupil_, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(right_pupil_, 0, 0);
-    lv_obj_set_style_radius(right_pupil_, 3, 0);
-    lv_obj_set_size(right_pupil_, 7, 7);
-    lv_obj_align(right_pupil_, LV_ALIGN_CENTER, 0, 0);
 
     /* === OBJEK MULUT DINAMIS (Di bawah mata) === */
     mouth_ = lv_obj_create(face_container_);
@@ -257,7 +241,7 @@ void OledDisplay::UpdateTargetShape(int emote) {
         case 0: target_w_ = 32; target_h_ = 36; target_r_ = 14; target_angle_l_ = 0; target_angle_r_ = 0; break; // Netral
         case 1: target_w_ = 36; target_h_ = 18; target_r_ = LV_RADIUS_CIRCLE; target_angle_l_ = 0; target_angle_r_ = 0; break; // Happy
         case 2: target_w_ = 34; target_h_ = 16; target_r_ = 6; target_angle_l_ = 250; target_angle_r_ = -250; break; // Angry
-        case 3: target_w_ = 30; target_h_ = 3;  target_r_ = 1; target_angle_l_ = 0; target_angle_r_ = 0; break; // Sleepy
+        case 3: target_w_ = 30; target_h_ = 3;  target_r_ = 1; target_angle_l_ = 0; target_angle_r_ = 0; break; // Sleepy (Merem bersih)
         case 4: target_w_ = 40; target_h_ = 40; target_r_ = 20; target_angle_l_ = 0; target_angle_r_ = 0; break; // Surprised
         case 5: target_w_ = 34; target_h_ = 16; target_r_ = 6; target_angle_l_ = -250; target_angle_r_ = 250; break; // Sad
         case 6: target_w_ = 32; target_h_ = 24; target_r_ = 10; target_angle_l_ = -100; target_angle_r_ = 150; break; // Confused
@@ -279,22 +263,20 @@ void OledDisplay::UpdateFace() {
     static bool is_sleeping = false;
     static int64_t wake_shock_timeout = 0;
 
-    // Cek aktivitas / interaksi masuk untuk membangunkan tidur
+    // Cek aktivitas untuk membangunkan tidur (25 Detik threshold)
     if (ai_emotion_active_ || anim_state_ != 0) {
         if (is_sleeping) {
-            // Baru bangun: Kaget + Shocked sesaat
-            wake_shock_timeout = now + 1200; // 1.2 detik kaget
-            current_emotion_ = 7; // Shocked
+            wake_shock_timeout = now + 1200; 
+            current_emotion_ = 7; // Kaget pas bangun
         }
         last_activity_time = now;
         is_sleeping = false;
     }
 
     if (wake_shock_timeout > 0 && now < wake_shock_timeout) {
-        // Sedang dalam fase kaget bangun tidur
         current_emotion_ = 7;
     } else {
-        if (wake_shock_timeout > 0) wake_shock_timeout = 0; // Selesai kaget
+        if (wake_shock_timeout > 0) wake_shock_timeout = 0;
         
         if (ai_emotion_active_ && now > ai_emotion_timeout_) {
             ai_emotion_active_ = false; 
@@ -306,7 +288,7 @@ void OledDisplay::UpdateFace() {
     if (anim_state_ == 0 && wake_shock_timeout == 0) {
         if (!ai_emotion_active_ && (now - last_activity_time > 25000)) {
             is_sleeping = true;
-            current_emotion_ = 3; // Tidur
+            current_emotion_ = 3; // Tidur bersih
             target_look_x_ = 0;
             target_look_y_ = 5;   
         } 
@@ -314,9 +296,9 @@ void OledDisplay::UpdateFace() {
             if (!ai_emotion_active_ && now > next_emote_change_) {
                 int chance = esp_random() % 18;
                 if (chance < 8) current_emotion_ = 0;
-                else if (chance == 8) current_emotion_ = 1; // Happy
-                else if (chance == 9) current_emotion_ = 6; // Confused
-                else if (chance == 10) current_emotion_ = 9; // Suspicious
+                else if (chance == 8) current_emotion_ = 1; 
+                else if (chance == 9) current_emotion_ = 6; 
+                else if (chance == 10) current_emotion_ = 9; 
                 else current_emotion_ = 0;
                 
                 next_emote_change_ = now + 2500 + (esp_random() % 6000);
@@ -402,14 +384,13 @@ void OledDisplay::UpdateFace() {
     } else if (current_emotion_ == 1 || current_emotion_ == 8) {
         mouth_w = 12; mouth_h = 4; mouth_r = 3; // Senyum lebar
     } else if (anim_state_ == 2) {
-        // Mulut mangap-tutup ngikutin suara saat ngomong
         float mouth_wave = sin(now / 20.0);
         mouth_w = 6 + (int)(mouth_wave * 4.0);
         mouth_h = 4 + (int)(std::abs(mouth_wave) * 4.0);
         mouth_r = LV_RADIUS_CIRCLE;
     }
 
-    // 6. RENDER KE LVGL
+    // 6. RENDER KE LVGL (Tanpa Pupil)
     lv_obj_set_size(left_eye_, (int)current_w_, final_lh);
     lv_obj_set_size(right_eye_, (int)current_w_, final_rh);
     lv_obj_set_style_radius(left_eye_, (int)current_r_, 0);
@@ -420,11 +401,6 @@ void OledDisplay::UpdateFace() {
 
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, -4 + final_oy);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, -4 + final_oy);
-
-    int pupil_ox = std::clamp((int)(ox * -0.3f), -2, 2);
-    int pupil_oy = std::clamp((int)(final_oy * -0.3f), -2, 2);
-    lv_obj_align(left_pupil_, LV_ALIGN_CENTER, pupil_ox, pupil_oy);
-    lv_obj_align(right_pupil_, LV_ALIGN_CENTER, pupil_ox, pupil_oy);
 
     // Render Mulut
     lv_obj_set_size(mouth_, mouth_w, mouth_h);
