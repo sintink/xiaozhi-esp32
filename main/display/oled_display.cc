@@ -262,19 +262,41 @@ void OledDisplay::UpdateFace() {
     static int64_t last_activity_time = now;
     static bool is_sleeping = false;
     static int64_t wake_shock_timeout = 0;
+    static bool is_night_grogginess = false;
 
-    // Cek aktivitas untuk membangunkan tidur (25 Detik threshold)
+    // Cek waktu sistem (Jam) untuk fitur Waktu/Night Mood
+    time_t now_sec = time(NULL);
+    struct tm timeinfo;
+    localtime_r(&now_sec, &timeinfo);
+    int current_hour = timeinfo.tm_hour; // 0 - 23
+    bool is_night_time = (current_hour >= 22 || current_hour < 6); // Jam 10 malam - 6 pagi
+
+    // A. LOGIKA BANGUN TIDUR (Membangunkan dari Sleep)
     if (ai_emotion_active_ || anim_state_ != 0) {
         if (is_sleeping) {
-            wake_shock_timeout = now + 1200; 
-            current_emotion_ = 7; // Kaget pas bangun
+            // Jika dibangunin malam hari -> Mode Night Grogginess (Lama & Bad Mood)
+            if (is_night_time) {
+                wake_shock_timeout = now + 3500; // 3.5 detik groggy lama
+                is_night_grogginess = true;
+            } else {
+                wake_shock_timeout = now + 1200; // 1.2 detik kaget biasa
+                is_night_grogginess = false;
+            }
+            current_emotion_ = 7; // Shocked / Kaget
         }
         last_activity_time = now;
         is_sleeping = false;
     }
 
+    // B. PENANGANAN FASE GROGGY PAS BANGUN
     if (wake_shock_timeout > 0 && now < wake_shock_timeout) {
-        current_emotion_ = 7;
+        int64_t remaining = wake_shock_timeout - now;
+        if (is_night_grogginess && remaining < 2300) {
+            // Fase kedua bangun malam: Muka ogah-ogahan / ngantuk berat
+            current_emotion_ = 9; // Suspicious / Cemberut
+        } else {
+            current_emotion_ = 7; // Kaget pas baru disentuh
+        }
     } else {
         if (wake_shock_timeout > 0) wake_shock_timeout = 0;
         
@@ -284,14 +306,33 @@ void OledDisplay::UpdateFace() {
         }
     }
 
-    // 1. LOGIKA IDLE & TAMAGOTCHI TIDUR (25 Detik)
+    // C. LOGIKA IDLE & MIKRO-INTERAKSI SEBELUM TIDUR (OPSI 5)
     if (anim_state_ == 0 && wake_shock_timeout == 0) {
-        if (!ai_emotion_active_ && (now - last_activity_time > 25000)) {
+        int64_t idle_time = now - last_activity_time;
+
+        // 1. Detik > 25: Tidur lelap
+        if (!ai_emotion_active_ && idle_time > 25000) {
             is_sleeping = true;
-            current_emotion_ = 3; // Tidur bersih
+            current_emotion_ = 3; // Sleepy
             target_look_x_ = 0;
             target_look_y_ = 5;   
         } 
+        // 2. Detik 15 - 25: Gelisah dicuekin (Celingukan & Sad/Suspicious)
+        else if (!ai_emotion_active_ && idle_time > 15000) {
+            if (idle_time > 20000) {
+                current_emotion_ = 5; // Sad (Hela napas dicuekin)
+            } else {
+                current_emotion_ = 9; // Suspicious / Bingung
+            }
+
+            // Celingukan nyariin user secara cepat
+            if (now > next_look_) {
+                target_look_x_ = (esp_random() % 2 == 0) ? 14 : -14;
+                target_look_y_ = (esp_random() % 5) - 2;
+                next_look_ = now + 400 + (esp_random() % 600); // Celingukan cepat
+            }
+        }
+        // 3. Detik 0 - 15: Idle Biasa / Santai
         else if (!is_sleeping) {
             if (!ai_emotion_active_ && now > next_emote_change_) {
                 int chance = esp_random() % 18;
@@ -334,7 +375,7 @@ void OledDisplay::UpdateFace() {
         bounce_y = (int)((wave1 * 0.7 + wave2 * 0.3) * 4.0);
     }
 
-    // 2. LERP TRANSISI
+    // D. TRANSISI & RENDER (Gunakan logika lerp & mulut dinamis sebelumnya)
     UpdateTargetShape(current_emotion_);
     
     current_w_ += (target_w_ - current_w_) * 0.25f;
@@ -343,7 +384,7 @@ void OledDisplay::UpdateFace() {
     current_angle_l_ += (target_angle_l_ - current_angle_l_) * 0.25f;
     current_angle_r_ += (target_angle_r_ - current_angle_r_) * 0.25f;
 
-    // 3. KEDIP
+    // Kedip
     float blink_mult = 1.0f;
     if (is_blinking_ && !is_sleeping) {
         int64_t elapsed = now - blink_start_;
@@ -355,12 +396,12 @@ void OledDisplay::UpdateFace() {
     int final_lh = (int)(current_h_ * blink_mult);
     int final_rh = (int)(current_h_ * blink_mult);
 
-    // 4. LIRIK & BREATHING
+    // Lirik & Breathing
     look_x_ += (target_look_x_ - look_x_) * 0.5f;
     look_y_ += (target_look_y_ - look_y_) * 0.5f;
     
     if (is_sleeping) {
-        float_y_ = sin(now / 800.0) * 1.2f; // Napas tidur pelan
+        float_y_ = sin(now / 800.0) * 1.2f; 
     } else if (anim_state_ == 0 && !is_blinking_) {
         float_y_ = sin(now / 600.0) * 1.5f; 
     } else {
@@ -371,18 +412,18 @@ void OledDisplay::UpdateFace() {
     int oy = std::clamp((int)look_y_, -4, 4);
     int final_oy = oy + bounce_y + (int)float_y_;
 
-    // 5. KELOLA BENTUK MULUT DINAMIS
+    // Mulut Dinamis
     int mouth_w = 8;
     int mouth_h = 3;
     int mouth_r = 2;
     int mouth_y_offset = 18;
 
     if (is_sleeping) {
-        mouth_w = 4; mouth_h = 2; // Mulut mingkem kecil pas tidur
+        mouth_w = 4; mouth_h = 2;
     } else if (current_emotion_ == 7 || wake_shock_timeout > 0) {
-        mouth_w = 8; mouth_h = 8; mouth_r = LV_RADIUS_CIRCLE; // Mangap bulat 'o' pas kaget
+        mouth_w = 8; mouth_h = 8; mouth_r = LV_RADIUS_CIRCLE; // Mangap 'o' pas kaget
     } else if (current_emotion_ == 1 || current_emotion_ == 8) {
-        mouth_w = 12; mouth_h = 4; mouth_r = 3; // Senyum lebar
+        mouth_w = 12; mouth_h = 4; mouth_r = 3; // Senyum
     } else if (anim_state_ == 2) {
         float mouth_wave = sin(now / 20.0);
         mouth_w = 6 + (int)(mouth_wave * 4.0);
@@ -390,7 +431,7 @@ void OledDisplay::UpdateFace() {
         mouth_r = LV_RADIUS_CIRCLE;
     }
 
-    // 6. RENDER KE LVGL (Tanpa Pupil)
+    // Render LVGL
     lv_obj_set_size(left_eye_, (int)current_w_, final_lh);
     lv_obj_set_size(right_eye_, (int)current_w_, final_rh);
     lv_obj_set_style_radius(left_eye_, (int)current_r_, 0);
@@ -402,7 +443,6 @@ void OledDisplay::UpdateFace() {
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_offset_ + ox, -4 + final_oy);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_offset_ + ox, -4 + final_oy);
 
-    // Render Mulut
     lv_obj_set_size(mouth_, mouth_w, mouth_h);
     lv_obj_set_style_radius(mouth_, mouth_r, 0);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, ox / 2, mouth_y_offset + final_oy);
