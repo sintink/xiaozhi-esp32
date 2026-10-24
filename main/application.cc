@@ -1206,18 +1206,15 @@ void Application::PlayMusicFromUrl(const std::string& url) {
         return;
     }
 
-    // Queue musik
+    // Kalau lagi sibuk (ngomong/dengerin), masukin ke antrean
     pending_music_url_ = url;
     ESP_LOGI(TAG, "Device sibuk (%d), queue musik sampai idle", (int)state);
 
-    // Paksa keluar dari mode percakapan → state idle
-    if (state == kDeviceStateSpeaking || state == kDeviceStateListening) {
-        AbortSpeaking(kAbortReasonNone);
-        if (protocol_ && protocol_->IsAudioChannelOpened()) {
-            ESP_LOGI(TAG, "Tutup audio channel buat musik");
-            protocol_->CloseAudioChannel();
-        }
-    }
+    // 💡 SUDAH DIPERBAIKI:
+    // Kita sengaja TIDAK memanggil AbortSpeaking() atau CloseAudioChannel().
+    // Biarkan TTS dari server Cloud selesai berbicara sampai habis.
+    // Setelah TTS selesai, State Machine akan otomatis mengubah status menjadi IDLE.
+    // Pada saat IDLE itulah, sistem akan mengecek antrean (pending_music_url_) dan memutar musiknya.
 }
 
 void Application::CheckAndPlayPendingMusic() {
