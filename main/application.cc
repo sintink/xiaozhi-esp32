@@ -14,6 +14,9 @@
 #include "websocket_protocol.h"
 #include "espnow_sender.h"
 #include "mdns_helper.h"
+#include <atomic>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include <driver/gpio.h>
 #include <esp_log.h>
@@ -1206,15 +1209,45 @@ void Application::PlayMusicFromUrl(const std::string& url) {
         return;
     }
 
-    // Kalau lagi sibuk (ngomong/dengerin), masukin ke antrean
+    // Queue musik
     pending_music_url_ = url;
     ESP_LOGI(TAG, "Device sibuk (%d), queue musik sampai idle", (int)state);
 
-    // 💡 SUDAH DIPERBAIKI:
-    // Kita sengaja TIDAK memanggil AbortSpeaking() atau CloseAudioChannel().
-    // Biarkan TTS dari server Cloud selesai berbicara sampai habis.
-    // Setelah TTS selesai, State Machine akan otomatis mengubah status menjadi IDLE.
-    // Pada saat IDLE itulah, sistem akan mengecek antrean (pending_music_url_) dan memutar musiknya.
+    // 💡 CEK AGAR TASK TIDAK BERGANDA (Atomic Version)
+    bool expected = false;
+    // compare_exchange_strong: Set ke true HANYA JIKA nilainya masih false
+    // Ini operasi atomik paling aman untuk locking di C++
+    if (!is_music_task_active_.compare_exchange_strong(expected, true)) {
+        ESP_LOGI(TAG, "Musik task sudah mengantre, update URL saja.");
+        return; 
+    }
+
+    xTaskCreate([](void* arg) {
+        Application* app = static_cast<Application*>(arg);
+        
+        // Timeout 10 detik (biar gak nyangkut selamanya)
+        int timeout_counter = 0;
+        
+        while (app->GetDeviceState() == kDeviceStateSpeaking && timeout_counter < 100) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            timeout_counter++;
+        }
+        
+        // Jeda 0.5 detik biar napas
+        vTaskDelay(pdMS_TO_TICKS(500));
+        
+        // Paksa puter musik!
+        if (!app->pending_music_url_.empty()) {
+            ESP_LOGI(TAG, "🚀 Memutar musik paksa setelah TTS selesai!");
+            std::string url_to_play = app->pending_music_url_;
+            app->pending_music_url_ = ""; 
+            app->StartNotification(url_to_play, {});
+        }
+        
+        // Lepas kunci flag (Atomic Store)
+        app->is_music_task_active_.store(false); 
+        vTaskDelete(NULL); 
+    }, "PlayMusicTask", 4096, this, 1, NULL);
 }
 
 void Application::CheckAndPlayPendingMusic() {
