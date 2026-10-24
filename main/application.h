@@ -13,6 +13,7 @@
 #include <functional>
 #include <cstdint>
 #include <vector>
+#include <atomic>
 
 #include "protocol.h"
 #include "ota.h"
@@ -20,6 +21,8 @@
 #include "device_state.h"
 #include "device_state_machine.h"
 #include "notify/notify_player.h"
+
+
 
 // Main event bits
 #define MAIN_EVENT_SCHEDULE             (1 << 0)
@@ -145,7 +148,8 @@ private:
     AudioService audio_service_;
     NotifyPlayer notify_player_;
     uint32_t notification_playback_id_ = 0;
-    std::string pending_music_url_;  
+    std::string pending_music_url_;
+    std::atomic<bool> is_music_task_active_{false};
     std::unique_ptr<Ota> ota_;
 
     std::function<void(const std::string&)> mcp_broadcast_callback_;
