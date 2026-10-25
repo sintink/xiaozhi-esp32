@@ -551,6 +551,9 @@ void Application::CheckNewVersion() {
 }
 
 void Application::InitializeProtocol() {
+
+    esp_log_level_set("Display", ESP_LOG_ERROR);
+    
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
     auto codec = board.GetAudioCodec();
