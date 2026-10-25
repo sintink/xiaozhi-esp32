@@ -166,3 +166,23 @@ void SingleLed::OnStateChanged() {
             return;
     }
 }
+
+void SingleLed::FlashColor(uint8_t r, uint8_t g, uint8_t b, int duration_ms) {
+    if (led_strip_ == nullptr) {
+        return;
+    }
+
+    // 1. Stop blink apapun yang sedang jalan, lalu set warna flash
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        esp_timer_stop(blink_timer_);
+        led_strip_set_pixel(led_strip_, 0, r, g, b);
+        led_strip_refresh(led_strip_);
+    }
+
+    // 2. Hold warna flash selama duration_ms (blocking di button task, bukan main task)
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
+
+    // 3. Restore ke state color saat ini (biru/merah/hijau/mati)
+    OnStateChanged();
+}
