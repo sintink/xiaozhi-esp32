@@ -31,6 +31,7 @@ private:
     Button touch_button_;
     Button volume_up_button_;
     Button volume_down_button_;
+    Button poke_button_;
 
     void InitializeDisplayI2c() {
         i2c_master_bus_config_t bus_config = {
@@ -144,6 +145,12 @@ private:
             GetAudioCodec()->SetOutputVolume(0);
             GetDisplay()->ShowNotification(Lang::Strings::MUTED);
         });
+
+        // ─── POKE BUTTON: pancing AI ngomong sendiri ───
+         poke_button_.OnClick([this]() {
+            ESP_LOGI(TAG, "🥊 Poke button clicked");
+            Application::GetInstance().TriggerPoke();
+         });
     }
 
     // 物联网初始化，逐步迁移到 MCP 协议
@@ -156,7 +163,9 @@ public:
         boot_button_(BOOT_BUTTON_GPIO),
         touch_button_(TOUCH_BUTTON_GPIO, true),
         volume_up_button_(VOLUME_UP_BUTTON_GPIO),
-        volume_down_button_(VOLUME_DOWN_BUTTON_GPIO) {
+        volume_down_button_(VOLUME_DOWN_BUTTON_GPIO),
+        poke_button_(POKE_BUTTON_GPIO)    
+   {
         InitializeDisplayI2c();
         InitializeSsd1306Display();
         InitializeButtons();
