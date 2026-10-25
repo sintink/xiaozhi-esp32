@@ -1240,17 +1240,8 @@ void Application::PlayMusicFromUrl(const std::string& url) {
             std::string url_to_play = app->pending_music_url_;
             app->pending_music_url_ = ""; 
             
-            // Panggil StartNotification
+            // Cukup panggil ini, jangan paksa loop state
             app->StartNotification(url_to_play, {});
-            
-            // 💡 TRIK DEWA: Tahan state biar gak drop ke idle
-            // Kita paksa state jadi notifying selama 5 detik pertama
-            for (int i = 0; i < 50; i++) {
-                if (app->GetDeviceState() != kDeviceStateNotifying) {
-                    app->SetDeviceState(kDeviceStateNotifying);
-                }
-                vTaskDelay(pdMS_TO_TICKS(100));
-            }
         }
         
         app->is_music_task_active_.store(false); 
