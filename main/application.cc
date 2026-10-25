@@ -590,14 +590,17 @@ void Application::InitializeProtocol() {
     });
 
     protocol_->OnAudioChannelClosed([this, &board]() {
-        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
-        Schedule([this]() {
-            auto display = Board::GetInstance().GetDisplay();
-            display->SetChatMessage("system", "");
+    board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+    Schedule([this]() {
+        auto display = Board::GetInstance().GetDisplay();
+        display->SetChatMessage("system", "");
+        // 💡 PROTEKSI: Jangan drop ke idle kalau lagi muter musik
+        if (GetDeviceState() != kDeviceStateNotifying) {
             SetDeviceState(kDeviceStateIdle);
-        });
+        }
     });
-
+});
+    
     protocol_->OnIncomingJson([this, display](const cJSON* root) {
         // Parse JSON data
         auto type = cJSON_GetObjectItem(root, "type");
