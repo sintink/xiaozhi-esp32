@@ -1202,18 +1202,15 @@ void Application::PlayMusicFromUrl(const std::string& url) {
 
     auto state = GetDeviceState();
 
-    // Kalau idle & gak sibuk → langsung main
     if (state == kDeviceStateIdle && !notify_player_.IsBusy()) {
         ESP_LOGI(TAG, "Langsung play musik");
         StartNotification(url, {});
         return;
     }
 
-    // Queue musik
     pending_music_url_ = url;
     ESP_LOGI(TAG, "Device sibuk (%d), queue musik sampai idle", (int)state);
 
-    // Cek Anti-Race Condition
     bool expected = false;
     if (!is_music_task_active_.compare_exchange_strong(expected, true)) {
         ESP_LOGI(TAG, "Musik task sudah mengantre, update URL saja.");
@@ -1223,34 +1220,39 @@ void Application::PlayMusicFromUrl(const std::string& url) {
     xTaskCreate([](void* arg) {
         Application* app = static_cast<Application*>(arg);
         
-        // 1. Tunggu TTS selesai ngomong
         int timeout_counter = 0;
         while (app->GetDeviceState() == kDeviceStateSpeaking && timeout_counter < 100) {
             vTaskDelay(pdMS_TO_TICKS(100));
             timeout_counter++;
         }
         
-        // 2. Jeda dikit biar transisi state-nya stabil
         vTaskDelay(pdMS_TO_TICKS(200));
         
-        // 3. 💡 KUNCI UTAMA: Paksa tutup channel & masuk Idle
         if (app->protocol_ && app->protocol_->IsAudioChannelOpened()) {
             ESP_LOGI(TAG, "Memaksa state Idle sebelum memutar musik...");
             app->protocol_->CloseAudioChannel();
         }
         
-        // 4. Jeda sebentar biar State Machine selesai berubah ke Idle
         vTaskDelay(pdMS_TO_TICKS(100));
         
-        // 5. Eksekusi Putar Musik!
         if (!app->pending_music_url_.empty()) {
             ESP_LOGI(TAG, "🚀 Memutar musik paksa setelah TTS selesai!");
             std::string url_to_play = app->pending_music_url_;
             app->pending_music_url_ = ""; 
+            
+            // Panggil StartNotification
             app->StartNotification(url_to_play, {});
+            
+            // 💡 TRIK DEWA: Tahan state biar gak drop ke idle
+            // Kita paksa state jadi notifying selama 5 detik pertama
+            for (int i = 0; i < 50; i++) {
+                if (app->GetDeviceState() != kDeviceStateNotifying) {
+                    app->SetDeviceState(kDeviceStateNotifying);
+                }
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
         }
         
-        // Lepas kunci
         app->is_music_task_active_.store(false); 
         vTaskDelete(NULL); 
     }, "PlayMusicTask", 4096, this, 1, NULL);
