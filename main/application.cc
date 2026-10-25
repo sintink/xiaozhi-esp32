@@ -1368,6 +1368,64 @@ ListeningMode Application::GetDefaultListeningMode() const {
     return aec_mode_ == kAecOff ? kListeningModeAutoStop : kListeningModeRealtime;
 }
 
+void Application::TriggerPoke() {
+    // Harus di main task — bisa dipanggil dari button callback (task lain)
+    Schedule([this]() {
+        if (!protocol_) {
+            ESP_LOGE(TAG, "Poke: protocol_ belum siap");
+            return;
+        }
+
+        auto state = GetDeviceState();
+        if (state == kDeviceStateNotifying) {
+            // Musik lagi muter → stop dulu (konsisten dengan WakeWordInvoke)
+            ESP_LOGI(TAG, "Poke: stop notifikasi dulu");
+            StopNotification();
+            // Setelah stop, state Idle → kita lempar ke schedule lagi
+            Schedule([this]() { TriggerPoke(); });
+            return;
+        }
+
+        if (state != kDeviceStateIdle) {
+            ESP_LOGW(TAG, "Poke diabaikan (state=%d)", (int)state);
+            return;
+        }
+
+        // Anti-spam: minimal 3 detik antar poke
+        static uint32_t last_poke_ms = 0;
+        uint32_t now_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if (now_ms - last_poke_ms < 3000) {
+            ESP_LOGW(TAG, "Poke terlalu cepat, diabaikan");
+            return;
+        }
+        last_poke_ms = now_ms;
+
+        // Transisi ke Connecting
+        if (!SetDeviceState(kDeviceStateConnecting)) {
+            ESP_LOGW(TAG, "Poke: transisi ke Connecting gagal");
+            return;
+        }
+
+        auto& board = Board::GetInstance();
+        board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+
+        if (!protocol_->IsAudioChannelOpened()) {
+            if (!protocol_->OpenAudioChannel()) {
+                ESP_LOGE(TAG, "Poke: buka channel gagal");
+                SetDeviceState(kDeviceStateIdle);
+                return;
+            }
+        }
+
+        ESP_LOGI(TAG, "🥊 Poke: kirim wake word 'Poke' ke server");
+        protocol_->SendWakeWordDetected("Poke");
+
+        // Konsisten dengan ContinueWakeWordInvoke (versi #else)
+        play_popup_on_listening_ = true;
+        SetListeningMode(GetDefaultListeningMode());
+    });
+}
+
 void Application::Reboot() {
     ESP_LOGI(TAG, "Rebooting...");
     if (GetDeviceState() == kDeviceStateNotifying) {
