@@ -121,7 +121,9 @@ public:
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
     void PlayMusicFromUrl(const std::string& url);
-    void CheckAndPlayPendingMusic();   
+    void CheckAndPlayPendingMusic();
+
+    void TriggerPoke();
     AudioService& GetAudioService() { return audio_service_; }
     
     /**
