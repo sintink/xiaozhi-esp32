@@ -16,6 +16,7 @@ public:
     virtual ~SingleLed();
 
     void OnStateChanged() override;
+    void FlashColor(uint8_t r, uint8_t g, uint8_t b, int duration_ms);
 
 private:
     std::mutex mutex_;
