@@ -147,10 +147,13 @@ private:
         });
 
         // ─── POKE BUTTON: pancing AI ngomong sendiri ───
-         poke_button_.OnClick([this]() {
-            ESP_LOGI(TAG, "🥊 Poke button clicked");
-            Application::GetInstance().TriggerPoke();
-         });
+poke_button_.OnClick([this]() {
+    ESP_LOGI(TAG, "🥊 Poke button clicked");
+    if (auto* single = static_cast<SingleLed*>(GetLed())) {
+        single->FlashColor(255, 200, 0, 100);  // 🟡 kuning 100ms
+    }
+    Application::GetInstance().TriggerPoke();
+});
     }
 
     // 物联网初始化，逐步迁移到 MCP 协议
