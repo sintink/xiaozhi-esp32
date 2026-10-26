@@ -325,6 +325,61 @@ AddTool("self.music.play",
                 return result_text;
             });
 
+    // ─── Tool: Play Music di Soundcard STB (Mode 2) ───
+AddTool("self.music.play_room",
+        "Putar lagu atau musik di speaker ruangan (USB Sound Card STB). "
+        "Gunakan tool ini HANYA JIKA user secara spesifik meminta lagu diputar "
+        "lewat speaker ruangan, soundcard, atau STB. Args:\n"
+        "  query: judul lagu, nama artis, atau kata kunci pencarian.",
+        PropertyList({Property("query", kPropertyTypeString)}),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto query = properties["query"].value<std::string>();
+            ESP_LOGI(TAG, "Play music in room request: %s", query.c_str());
+
+            // 1. Dapatkan IP STB (auto-detect)
+            std::string stb_ip = GetStbIpAuto();
+            
+            // 2. Update Panel P10 via ESP-NOW (opsional, biar panel kasih info)
+            EspNowSend("SPEAKING", "Putar di STB: " + query);
+
+            // 3. Tembak API PHP musik-local.php
+            std::string url = "http://" + stb_ip + "/api/musik-local.php?q=" + UrlEncode(query);
+            ESP_LOGI(TAG, "Request ke: %s", url.c_str());
+
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+            if (!http) {
+                ESP_LOGE(TAG, "Gagal buat HTTP client");
+                return false;
+            }
+
+            if (auto opened = http->Open("GET", url); !opened) {
+                ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
+                return false;
+            }
+
+            if (auto status = http->GetStatusCode(); !status || *status != 200) {
+                ESP_LOGE(TAG, "STB error status musik lokal: %d", status ? *status : -1);
+                http->Close();
+                return false;
+            }
+
+            std::string response = http->ReadAll();
+            http->Close();
+
+            // 4. Parse JSON dari PHP (opsional, buat mastiin status success)
+            cJSON* root = cJSON_Parse(response.c_str());
+            if (root) {
+                auto status_item = cJSON_GetObjectItem(root, "status");
+                if (cJSON_IsString(status_item) && strcmp(status_item->valuestring, "success") == 0) {
+                    cJSON_Delete(root);
+                    return "Oke, lagu " + query + " sudah diputar di speaker ruangan STB.";
+                }
+                cJSON_Delete(root);
+            }
+
+            return "Lagu " + query + " sudah dikirim ke speaker ruangan.";
+        });
+
 // Taro disni ketika tanbah tool baru
 
     // Restore the original tools list to the end of the tools list
