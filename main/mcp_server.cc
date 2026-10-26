@@ -380,6 +380,40 @@ AddTool("self.music.play_room",
             return "Lagu " + query + " sudah dikirim ke speaker ruangan.";
         });
 
+    // ─── Tool: Stop Music di Soundcard STB ───
+AddTool("self.music.stop_room",
+        "Hentikan pemutaran lagu di speaker ruangan STB. "
+        "Gunakan tool ini jika user minta mematikan lagu, stop musik, atau berhenti.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/musik-stop.php";
+            
+            ESP_LOGI(TAG, "Stop music request ke: %s", url.c_str());
+            
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+            if (!http) {
+                ESP_LOGE(TAG, "Gagal buat HTTP client");
+                return false;
+            }
+
+            if (auto opened = http->Open("GET", url); !opened) {
+                ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
+                return false;
+            }
+
+            if (auto status = http->GetStatusCode(); !status || *status != 200) {
+                ESP_LOGE(TAG, "STB error status stop musik: %d", status ? *status : -1);
+                http->Close();
+                return false;
+            }
+
+            http->ReadAll(); // Baca balasan JSON dari PHP
+            http->Close();
+
+            return "Oke, lagu di speaker ruangan sudah dimatikan.";
+        });
+
 // Taro disni ketika tanbah tool baru
 
     // Restore the original tools list to the end of the tools list
