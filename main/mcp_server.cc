@@ -380,6 +380,27 @@ AddTool("self.music.play_room",
             return "Lagu " + query + " sudah dikirim ke speaker ruangan.";
         });
 
+    // ─── Tool: Atur Volume Speaker Ruangan ───
+AddTool("self.music.set_volume_room",
+        "Atur volume speaker ruangan STB. Args:\n"
+        "  level: angka dari 0 sampai 100.",
+        PropertyList({Property("level", kPropertyTypeInteger, 0, 100)}),
+        [](const PropertyList& properties) -> ReturnValue {
+            int level = properties["level"].value<int>();
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/volume.php?level=" + std::to_string(level);
+            
+            ESP_LOGI(TAG, "Atur volume STB ke %d%%", level);
+            
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+            if (http && http->Open("GET", url)) {
+                http->ReadAll();
+                http->Close();
+                return "Oke, volume speaker ruangan diatur ke " + std::to_string(level) + " persen.";
+            }
+            return false;
+        });
+
     // ─── Tool: Stop Music di Soundcard STB ───
 AddTool("self.music.stop_room",
         "Hentikan pemutaran lagu di speaker ruangan STB. "
