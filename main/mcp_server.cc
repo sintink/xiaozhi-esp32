@@ -414,6 +414,57 @@ AddTool("self.music.stop_room",
             return "Oke, lagu di speaker ruangan sudah dimatikan.";
         });
 
+    // ─── Tool: Cek Status Server (Read-Only) ───
+AddTool("self.server.status",
+        "Cek kesehatan server (RAM, Storage, Services, Versi yt-dlp). "
+        "Gunakan tool ini HANYA JIKA user (Mas Erwin) meminta untuk cek server, cek RAM, cek storage, atau cek kondisi sistem.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/server_status.php";
+            
+            ESP_LOGI(TAG, "Cek status server ke: %s", url.c_str());
+            
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+            if (!http) {
+                ESP_LOGE(TAG, "Gagal buat HTTP client");
+                return "Waduh Mas Erwin, gagal konek ke server.";
+            }
+
+            if (auto opened = http->Open("GET", url); !opened) {
+                ESP_LOGE(TAG, "Gagal buka server: %s", opened.error().ToString().c_str());
+                return "Waduh Mas Erwin, server-nya nggak bisa dihubungi.";
+            }
+
+            if (auto status = http->GetStatusCode(); !status || *status != 200) {
+                ESP_LOGE(TAG, "Server error status: %d", status ? *status : -1);
+                http->Close();
+                return "Waduh Mas Erwin, server-nya ngasih error.";
+            }
+
+            std::string response = http->ReadAll();
+            http->Close();
+
+            // Parse JSON dari PHP
+            cJSON* root = cJSON_Parse(response.c_str());
+            if (!root) {
+                return "Gagal baca data dari server, Mas Erwin.";
+            }
+
+            auto laporan_item = cJSON_GetObjectItem(root, "laporan_server");
+            std::string result_text = "Gagal mengambil laporan, Mas Erwin.";
+            
+            if (cJSON_IsString(laporan_item) && laporan_item->valuestring[0] != '\0') {
+                result_text = laporan_item->valuestring;
+            }
+            
+            cJSON_Delete(root);
+
+            // Teks mentah dashboard 'ersa' ini bakal dibaca sama LLM (AI-nya)
+            // LLM yang bakal ngerangkum dan ngomong gaya "Mas Erwin"
+            return result_text;
+        });
+
 // Taro disni ketika tanbah tool baru
 
     // Restore the original tools list to the end of the tools list
