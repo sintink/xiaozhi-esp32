@@ -678,7 +678,7 @@ void Application::InitializeProtocol() {
 
         if (clean_text.find("self.") != std::string::npos ||
             (!clean_text.empty() && clean_text[0] == '%')) {
-            clean_text = "Memutar musik, tunggu sebentar ya...";
+            clean_text = "Tunggu Sebentar ...";
             glyphs.clear();
         }
 
