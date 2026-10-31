@@ -380,6 +380,32 @@ AddTool("self.music.play_room",
             return "Lagu " + query + " sudah dikirim ke speaker ruangan.";
         });
 
+    // ─── Tool: Cek Log Error Musik (Buat Tanggung Jawab Ersa) ───
+AddTool("self.server.check_music_log",
+        "Gunakan tool ini HANYA JIKA user komplain musik tidak bunyi atau gagal diputar. "
+        "Tool ini akan mengambil catatan error (log) terakhir dari server.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/check_log.php";
+            
+            ESP_LOGI(TAG, "Cek log musik ke: %s", url.c_str());
+            
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(5);
+            if (!http) return "Gagal buat HTTP client";
+
+            if (auto opened = http->Open("GET", url); !opened) {
+                ESP_LOGE(TAG, "Gagal buka server: %s", opened.error().ToString().c_str());
+                return "Gagal konek ke server buat cek log.";
+            }
+
+            std::string response = http->ReadAll();
+            http->Close();
+
+            // Balikin teks mentah JSON-nya ke Ersa
+            return response; 
+        });
+
     // ─── Tool: Atur Volume Speaker Ruangan ───
 AddTool("self.music.set_volume_room",
         "Atur volume speaker ruangan STB. Args:\n"
