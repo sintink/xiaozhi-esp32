@@ -1274,67 +1274,62 @@ void Application::CheckAndPlayPendingMusic() {
 }
 
 void Application::StopNotification() {
-    // ─── Kirim perintah stop ke STB (kill yt-dlp + ffmpeg) ───
-    static bool stb_stop_sent = false;   // hindari spam
-    if (!stb_stop_sent) {
-        stb_stop_sent = true;
-
-        // ─── Auto-detect IP STB (mDNS → subnet fallback) ───
-        std::string stb_ip = ResolveHostname("armbian.local");
-        if (stb_ip.empty()) {
-            // Fallback: subnet-based
-            esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-            esp_netif_ip_info_t ip_info = {};
-            if (netif && esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
-                char ip_str[16];
-                snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
-
-                int a, b, c, d;
-                if (sscanf(ip_str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4) {
-                    if (c == 2) {
-                        stb_ip = "192.168.2.200";  // Rumah
-                        ESP_LOGI(TAG, "Stop: Subnet 192.168.2.x → STB 192.168.2.200");
-                    } else {
-                        stb_ip = "192.168.1.199";  // Kerja
-                        ESP_LOGI(TAG, "Stop: Subnet 192.168.1.x → STB 192.168.1.199");
-                    }
-                }
-            }
-            if (stb_ip.empty()) {
-                stb_ip = "192.168.1.199";  // ultimate fallback
-                ESP_LOGW(TAG, "Stop: Fallback default 192.168.1.199");
-            }
-        } else {
-            ESP_LOGI(TAG, "Stop: STB via mDNS: %s", stb_ip.c_str());
-        }
-
-        // ─── Kirim HTTP stop ke STB ───
-        std::string stop_url = "http://" + stb_ip + "/api/musik-stop.php";
-
-        auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
-        if (http) {
-            if (auto opened = http->Open("GET", stop_url); opened) {
-                ESP_LOGI(TAG, "Kirim stop ke STB: %s", stop_url.c_str());
-            } else {
-                ESP_LOGW(TAG, "Gagal kirim stop ke STB");
-            }
-            http->Close();
-        }
-
-        // Reset flag setelah 1 detik biar bisa dipakai lagi
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        stb_stop_sent = false;
-    }
-
-    // ─── Stop playback lokal ───
+    // ─── 1. Stop playback lokal ESP32 (SEKETIKA) ───
     notify_player_.Stop();
     audio_service_.ResetDecoder();
     auto& board = Board::GetInstance();
     board.GetDisplay()->SetChatMessage("assistant", "");
     board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+    
     if (GetDeviceState() == kDeviceStateNotifying) {
         SetDeviceState(kDeviceStateIdle);
     }
+
+    // ─── 2. Lempar tugas nembak STB ke Background Task ───
+    SendRemoteStopCommand();
+}
+
+void Application::SendRemoteStopCommand() {
+    // Cegah spam task
+    static bool is_task_running = false;
+    if (is_task_running) return;
+    is_task_running = true;
+
+    xTaskCreate([](void* arg) {
+        Application* app = static_cast<Application*>(arg);
+        
+        // ⚡ SPEK DEWA: Jeda 1.5 detik biar socket stream di PHP bener-bener CLOSED
+        vTaskDelay(pdMS_TO_TICKS(1500));
+
+        std::string stb_ip = ResolveHostname("armbian.local");
+        if (stb_ip.empty()) {
+            esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+            esp_netif_ip_info_t ip_info = {};
+            if (netif && esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+                char ip_str[16];
+                snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
+                int a, b, c, d;
+                if (sscanf(ip_str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4) {
+                    stb_ip = (c == 2) ? "192.168.2.200" : "192.168.1.199";
+                }
+            }
+            if (stb_ip.empty()) stb_ip = "192.168.1.199";
+        }
+
+        std::string stop_url = "http://" + stb_ip + "/api/musik-stop.php";
+        auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
+        if (http) {
+            if (auto opened = http->Open("GET", stop_url); opened) {
+                ESP_LOGI(TAG, "Asynchronous Stop berhasil dikirim ke STB");
+            } else {
+                ESP_LOGW(TAG, "Gagal kirim Asynchronous Stop: %s", opened.error().ToString().c_str());
+            }
+            http->Close();
+        }
+        
+        is_task_running = false;
+        vTaskDelete(NULL);
+    }, "RemoteStopTask", 4096, this, 1, NULL);
 }
 
 void Application::HandleNotificationFinished(uint32_t playback_id, bool success) {
