@@ -189,6 +189,20 @@ AddTool("self.music.play",
             auto query = properties["query"].value<std::string>();
             ESP_LOGI(TAG, "Play music request: %s", query.c_str());
 
+        // ─── 🛑 PENJAGA PINTU (ANTI-BEGO) ───
+        std::string lower_query = query;
+        std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
+    
+        // Kalau query cuma kata umum atau terlalu pendek, tolak!
+        if (lower_query == "youtube" || lower_query == "lagu" || lower_query == "musik" || 
+            lower_query == "play" || lower_query == "putar" || lower_query == "lagu apa aja" || 
+            lower_query.length() < 3) {
+        
+        ESP_LOGW(TAG, "Query terlalu umum: %s. Dibatalkan.", query.c_str());
+            return "ERROR: Query lagu terlalu umum atau kosong. JANGAN memutar musik. "
+            "Kamu harus bertanya balik ke Mas Erwin: 'Mau lagu apa emangnya? Sebutin judulnya dong.'";
+        }
+
             // ─── Dapatkan IP STB (auto-detect) ───
             std::string stb_ip = GetStbIpAuto();
             ESP_LOGI(TAG, "STB IP: %s", stb_ip.c_str());
@@ -336,6 +350,19 @@ AddTool("self.music.play_room",
             auto query = properties["query"].value<std::string>();
             ESP_LOGI(TAG, "Play music in room request: %s", query.c_str());
 
+        // ─── 🛑 PENJAGA PINTU (ANTI-BEGO) ───
+        std::string lower_query = query;
+        std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
+    
+        if (lower_query == "youtube" || lower_query == "lagu" || lower_query == "musik" || 
+            lower_query == "play" || lower_query == "putar" || lower_query == "lagu apa aja" || 
+            lower_query.length() < 3) {
+        
+        ESP_LOGW(TAG, "Query terlalu umum: %s. Dibatalkan.", query.c_str());
+        return "ERROR: Query lagu terlalu umum atau kosong. JANGAN memutar musik. "
+               "Kamu harus bertanya balik ke Mas Erwin: 'Mau lagu apa emangnya? Sebutin judulnya dong.'";
+        }
+            
             // 1. Dapatkan IP STB (auto-detect)
             std::string stb_ip = GetStbIpAuto();
             
@@ -423,8 +450,8 @@ AddTool("self.music.set_volume_room",
                 http->ReadAll();
                 http->Close();
                 return "Oke, volume speaker ruangan diatur ke " + std::to_string(level) + " persen.";
-            }
-            return false;
+                }
+                return false;
         });
 
     // ─── Tool: Stop Music di Soundcard STB ───
