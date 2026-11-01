@@ -1177,6 +1177,7 @@ void Application::StartNotification(std::string audio_url, std::vector<NotifySub
     }
 
     auto& board = Board::GetInstance();
+    board.GetDisplay()->SetFaceState(3); // Masuk ke Mode Joget / Dance
     board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
     audio_service_.EnableVoiceProcessing(false);
     audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
@@ -1291,6 +1292,8 @@ void Application::StopNotification() {
     notify_player_.Stop();
     audio_service_.ResetDecoder();
     auto& board = Board::GetInstance();
+    // ─── TAMBAHAN: Balikin mata ke normal pas musik berhenti ───
+    board.GetDisplay()->SetFaceState(0); 
     board.GetDisplay()->SetChatMessage("assistant", "");
     board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
     
@@ -1359,6 +1362,8 @@ void Application::HandleNotificationFinished(uint32_t playback_id, bool success)
             // Kalau kebetulan tandon sudah kosong pas stream putus
             ESP_LOGI(TAG, "Tandon sudah kosong. Langsung selesai tanpa nembak STB.");
             notify_player_.Stop();
+            // ─── TAMBAHAN: Matikan joget karena musik sudah habis ───
+            display->SetFaceState(0); 
             auto& board = Board::GetInstance();
             board.GetDisplay()->SetChatMessage("assistant", "");
             board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
