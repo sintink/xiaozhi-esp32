@@ -234,16 +234,29 @@ void Application::Run() {
         }
 
         if (bits & MAIN_EVENT_PLAYBACK_DRAINED) {
-            if (audio_service_.IsPlaybackIdle()) {
-                notify_player_.OnPlaybackDrained();
-            }
-            // Deferred listening start (auto mode): the playback queue has
-            // drained, so it is now safe to enable voice processing.
-            if (pending_listening_start_ && GetDeviceState() == kDeviceStateListening &&
-                audio_service_.IsPlaybackIdle()) {
-                pending_listening_start_ = false;
-                StartListeningAudio();
-            }
+        if (audio_service_.IsPlaybackIdle()) {
+            notify_player_.OnPlaybackDrained();
+        
+        // ─── 💡 SPEK DEWA: Cek Tandon Air ───
+        if (pending_notify_finish_ && GetDeviceState() == kDeviceStateNotifying) {
+            pending_notify_finish_ = false;
+            ESP_LOGI(TAG, "Tandon audio sudah kosong total. Menyelesaikan notifikasi.");
+            
+            notify_player_.Stop();
+            audio_service_.ResetDecoder(); // Aman, karena audio memang sudah habis
+            auto& board = Board::GetInstance();
+            board.GetDisplay()->SetChatMessage("assistant", "");
+            board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+            SetDeviceState(kDeviceStateIdle);
+        }
+        }
+    
+    // (Biarkan kode pending_listening_start_ di bawahnya tetap ada)
+    if (pending_listening_start_ && GetDeviceState() == kDeviceStateListening &&
+        audio_service_.IsPlaybackIdle()) {
+        pending_listening_start_ = false;
+        StartListeningAudio();
+        }
         }
 
         if (bits & MAIN_EVENT_TOGGLE_CHAT) {
@@ -1338,7 +1351,30 @@ void Application::HandleNotificationFinished(uint32_t playback_id, bool success)
     }
     ESP_LOGI(TAG, "Notification playback %lu %s", static_cast<unsigned long>(playback_id),
              success ? "completed" : "failed");
-    StopNotification();
+
+    if (success) {
+        // 🛑 JANGAN panggil StopNotification() di sini. Jangan bunuh STB atau ResetDecoder!
+        
+        if (audio_service_.IsPlaybackIdle()) {
+            // Kalau kebetulan tandon sudah kosong pas stream putus
+            ESP_LOGI(TAG, "Tandon sudah kosong. Langsung selesai tanpa nembak STB.");
+            notify_player_.Stop();
+            auto& board = Board::GetInstance();
+            board.GetDisplay()->SetChatMessage("assistant", "");
+            board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+            if (GetDeviceState() == kDeviceStateNotifying) {
+                SetDeviceState(kDeviceStateIdle);
+            }
+        } else {
+            // Tandon masih ada isinya. Pasang bendera, biarkan Run() yang menunggu.
+            ESP_LOGI(TAG, "Stream habis, tapi tandon masih ada isinya. Menunggu tandon kosong...");
+            pending_notify_finish_ = true;
+        }
+    } else {
+        // Kalau gagal (atau di-stop paksa di tengah jalan), baru bersih-bersih total
+        ESP_LOGW(TAG, "Musik gagal atau dihentikan paksa. Kirim stop ke STB.");
+        StopNotification();
+    }
 }
 
 void Application::Schedule(std::function<void()>&& callback) {
