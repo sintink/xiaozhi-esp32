@@ -258,6 +258,10 @@ void OledDisplay::UpdateFace() {
 
     int64_t now = esp_timer_get_time() / 1000;
     int bounce_y = 0;
+    float dance_tilt = 0.0f;
+
+    // Tempo joget: 60000 / BPM (500 ms = 120 BPM)
+    constexpr float kDanceBeatMs = 500.0f;
 
     static int64_t last_activity_time = now;
     static bool is_sleeping = false;
@@ -306,7 +310,7 @@ void OledDisplay::UpdateFace() {
         }
     }
 
-    // C. LOGIKA IDLE & MIKRO-INTERAKSI SEBELUM TIDUR (OPSI 5)
+    // C. LOGIKA IDLE, MIKRO-INTERAKSI, SPEAKING, & DANCING
     if (anim_state_ == 0 && wake_shock_timeout == 0) {
         int64_t idle_time = now - last_activity_time;
 
@@ -369,14 +373,42 @@ void OledDisplay::UpdateFace() {
     } 
     else if (anim_state_ == 2) {
         // SPEAKING (Bounce Mochi)
+        last_activity_time = now; // Cegah masuk idle saat ngomong
         target_look_x_ = 0; target_look_y_ = 0;
         float wave1 = sin(now / 30.0);
         float wave2 = sin(now / 10.0);
         bounce_y = (int)((wave1 * 0.7 + wave2 * 0.3) * 4.0);
     }
+    else if (anim_state_ == 3) {
+        // === MODE JOGET / MUSIC DANCE (SINKRON SATU BEAT) ===
+        last_activity_time = now; // Cegah tidur pas muter musik
+        is_sleeping = false;
+        current_emotion_ = 1;     // Happy
+
+        float ph = now * (float)M_PI / kDanceBeatMs; // 1 beat = kDanceBeatMs
+
+        // Membal tiap beat
+        bounce_y = -(int)(fabsf(sinf(ph)) * 6.0f);
+
+        // Lirik kiri-kanan tiap 2 beat (maks 8 biar tidak mentok clamp)
+        target_look_x_ = (int)(sinf(ph * 0.5f) * 8.0f);
+        target_look_y_ = (int)(cosf(ph) * 3.0f);
+
+        // Kepala miring (searah kiri = kanan), ditambahkan setelah UpdateTargetShape
+        dance_tilt = sinf(ph * 0.5f) * 200.0f;
+
+        // Kedip sesekali biar lebih hidup
+        if (!is_blinking_ && now > next_blink_) {
+            is_blinking_ = true;
+            blink_start_ = now;
+            next_blink_ = now + 2500 + (esp_random() % 3000);
+        }
+    }
 
     // D. TRANSISI & RENDER (Gunakan logika lerp & mulut dinamis sebelumnya)
     UpdateTargetShape(current_emotion_);
+    target_angle_l_ += (int)dance_tilt;
+    target_angle_r_ += (int)dance_tilt;
     
     current_w_ += (target_w_ - current_w_) * 0.25f;
     current_h_ += (target_h_ - current_h_) * 0.25f;
@@ -422,6 +454,12 @@ void OledDisplay::UpdateFace() {
         mouth_w = 4; mouth_h = 2;
     } else if (current_emotion_ == 7 || wake_shock_timeout > 0) {
         mouth_w = 8; mouth_h = 8; mouth_r = LV_RADIUS_CIRCLE; // Mangap 'o' pas kaget
+    } else if (anim_state_ == 3) {
+        // Mulut ikut mangap kecil mengikuti beat (dicek sebelum emosi Happy)
+        float mouth_wave = sinf(now * (float)M_PI / kDanceBeatMs * 2.0f);
+        mouth_w = 10 + (int)(mouth_wave * 2.0f);
+        mouth_h = 4;
+        mouth_r = 2;
     } else if (current_emotion_ == 1 || current_emotion_ == 8) {
         mouth_w = 12; mouth_h = 4; mouth_r = 3; // Senyum
     } else if (anim_state_ == 2) {
