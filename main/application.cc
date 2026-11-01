@@ -1312,7 +1312,7 @@ void Application::SendRemoteStopCommand() {
     is_task_running = true;
 
     xTaskCreate([](void* arg) {
-        Application* app = static_cast<Application*>(arg);
+      //  Application* app = static_cast<Application*>(arg);
         
         // ⚡ SPEK DEWA: Jeda 1.5 detik biar socket stream di PHP bener-bener CLOSED
         vTaskDelay(pdMS_TO_TICKS(1500));
@@ -1356,27 +1356,28 @@ void Application::HandleNotificationFinished(uint32_t playback_id, bool success)
              success ? "completed" : "failed");
 
     if (success) {
-        // 🛑 JANGAN panggil StopNotification() di sini. Jangan bunuh STB atau ResetDecoder!
-        
         if (audio_service_.IsPlaybackIdle()) {
-            // Kalau kebetulan tandon sudah kosong pas stream putus
             ESP_LOGI(TAG, "Tandon sudah kosong. Langsung selesai tanpa nembak STB.");
+            
             notify_player_.Stop();
-            // ─── TAMBAHAN: Matikan joget karena musik sudah habis ───
-            display->SetFaceState(0); 
+            
+            // 💡 TAMBAHKAN BARIS INI BIAR 'display' DIKENAL
             auto& board = Board::GetInstance();
-            board.GetDisplay()->SetChatMessage("assistant", "");
+            auto display = board.GetDisplay(); 
+            
+            display->SetChatMessage("assistant", "");
+            display->SetFaceState(0); // Kalau lu butuh ini
+            
             board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+            
             if (GetDeviceState() == kDeviceStateNotifying) {
                 SetDeviceState(kDeviceStateIdle);
             }
         } else {
-            // Tandon masih ada isinya. Pasang bendera, biarkan Run() yang menunggu.
             ESP_LOGI(TAG, "Stream habis, tapi tandon masih ada isinya. Menunggu tandon kosong...");
             pending_notify_finish_ = true;
         }
     } else {
-        // Kalau gagal (atau di-stop paksa di tengah jalan), baru bersih-bersih total
         ESP_LOGW(TAG, "Musik gagal atau dihentikan paksa. Kirim stop ke STB.");
         StopNotification();
     }
