@@ -539,6 +539,145 @@ AddTool("self.server.status",
             return result_text;
         });
 
+    // ─── Tool: Cast Audio Chromecast (BARU) ───
+AddTool("self.music.cast_audio",
+        "Putar lagu atau musik lewat Chromecast. Gunakan tool ini kalau user minta memutar lagu, "
+        "musik, atau nyanyi. Args:\n"
+        "  query: judul lagu, nama artis, atau kata kunci pencarian.\n"
+        "  Contoh: 'Judika', 'Bukan Dia', 'Sheila On 7'.",
+        PropertyList({Property("query", kPropertyTypeString)}),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto query = properties["query"].value<std::string>();
+            ESP_LOGI(TAG, "Cast audio request: %s", query.c_str());
+
+            // ─── 🛑 PENJAGA PINTU (ANTI-BEGO) ───
+            std::string lower_query = query;
+            std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
+        
+            if (lower_query == "youtube" || lower_query == "lagu" || lower_query == "musik" || 
+                lower_query == "play" || lower_query == "putar" || lower_query == "lagu apa aja" || 
+                lower_query.length() < 3) {
+            
+                ESP_LOGW(TAG, "Query terlalu umum: %s. Dibatalkan.", query.c_str());
+                return "ERROR: Query lagu terlalu umum atau kosong. JANGAN memutar musik. "
+                       "Kamu harus bertanya balik ke Mas Erwin: 'Mau lagu apa emangnya? Sebutin judulnya dong.'";
+            }
+
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/musik-stb.php";
+
+            // Siapkan Body JSON (POST)
+            cJSON* root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "token", "36f3c4fe160bcdd665cb30041bde2b8f"); // ⚠️ GANTI DENGAN TOKEN ASLI
+            cJSON_AddStringToObject(root, "mode", "audio");
+            cJSON_AddStringToObject(root, "query", query.c_str());
+            char* json_str = cJSON_PrintUnformatted(root);
+            std::string payload(json_str);
+            cJSON_free(json_str);
+            cJSON_Delete(root);
+
+            // Kirim HTTP POST
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(15);
+            if (!http) return "Gagal buat HTTP client";
+
+            if (auto opened = http->Open("POST", url); !opened) {
+                ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
+                return "Gagal konek ke server.";
+            }
+
+            http->SetHeader("Content-Type", "application/json");
+            http->Write(payload.c_str(), payload.length());
+            std::string response = http->ReadAll();
+            http->Close();
+
+            // Parse balasan dari PHP
+            cJSON* res_root = cJSON_Parse(response.c_str());
+            if (!res_root) return "Gagal baca respon dari server.";
+            
+            auto status = cJSON_GetObjectItem(res_root, "status");
+            std::string result_str = "Musik diputar: " + query;
+            if (cJSON_IsString(status) && std::string(status->valuestring) == "ok") {
+                 // Sukses, biarkan result_str
+            } else {
+                 auto err = cJSON_GetObjectItem(res_root, "error");
+                 if (cJSON_IsString(err)) {
+                     result_str = "Gagal putar musik: " + std::string(err->valuestring);
+                 }
+            }
+            cJSON_Delete(res_root);
+
+            return result_str;
+        });
+
+    // ─── Tool: Play Video di SmartTube (BARU) ───
+AddTool("self.music.play_video_stb",
+        "Putar video YouTube di layar SmartTube (STB Android). "
+        "Gunakan tool ini kalau user minta memutar video atau menonton sesuatu. Args:\n"
+        "  query: judul video atau kata kunci pencarian.\n"
+        "  Contoh: 'Lofi hip hop radio', 'Tutorial Arduino', 'Kucing lucu'.",
+        PropertyList({Property("query", kPropertyTypeString)}),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto query = properties["query"].value<std::string>();
+            ESP_LOGI(TAG, "Play video request: %s", query.c_str());
+
+            // ─── 🛑 PENJAGA PINTU (ANTI-BEGO) ───
+            std::string lower_query = query;
+            std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
+        
+            if (lower_query == "youtube" || lower_query == "video" || lower_query == "tonton" || 
+                lower_query == "play" || lower_query == "putar" || lower_query.length() < 3) {
+            
+                ESP_LOGW(TAG, "Query video terlalu umum: %s. Dibatalkan.", query.c_str());
+                return "ERROR: Query video terlalu umum atau kosong. JANGAN memutar video. "
+                       "Kamu harus bertanya balik ke Mas Erwin: 'Mau nonton video apa emangnya?'";
+            }
+
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/musik-stb.php";
+
+            // Siapkan Body JSON (POST)
+            cJSON* root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "token", "36f3c4fe160bcdd665cb30041bde2b8f"); // ⚠️ GANTI DENGAN TOKEN ASLI (SAMA SEPERTI DI ATAS)
+            cJSON_AddStringToObject(root, "mode", "video");
+            cJSON_AddStringToObject(root, "query", query.c_str());
+            char* json_str = cJSON_PrintUnformatted(root);
+            std::string payload(json_str);
+            cJSON_free(json_str);
+            cJSON_Delete(root);
+
+            // Kirim HTTP POST
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(30); // Timeout lebih lama (30 detik)
+            if (!http) return "Gagal buat HTTP client";
+
+            if (auto opened = http->Open("POST", url); !opened) {
+                ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
+                return "Gagal konek ke server.";
+            }
+
+            http->SetHeader("Content-Type", "application/json");
+            http->Write(payload.c_str(), payload.length());
+            std::string response = http->ReadAll();
+            http->Close();
+
+            // Parse balasan dari PHP
+            cJSON* res_root = cJSON_Parse(response.c_str());
+            if (!res_root) return "Gagal baca respon dari server.";
+            
+            auto status = cJSON_GetObjectItem(res_root, "status");
+            std::string result_str = "Video diputar: " + query;
+            if (cJSON_IsString(status) && std::string(status->valuestring) == "ok") {
+                 // Sukses
+            } else {
+                 auto err = cJSON_GetObjectItem(res_root, "error");
+                 if (cJSON_IsString(err)) {
+                     result_str = "Gagal putar video: " + std::string(err->valuestring);
+                 }
+            }
+            cJSON_Delete(res_root);
+
+            return result_str;
+        });
+
 // Taro disni ketika tanbah tool baru
 
     // Restore the original tools list to the end of the tools list
