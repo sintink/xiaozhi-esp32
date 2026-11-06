@@ -539,7 +539,7 @@ AddTool("self.server.status",
             return result_text;
         });
 
-    // ─── Tool: Cast Audio Chromecast (BARU) ───
+// ─── Tool: Cast Audio Chromecast (BARU - GET) ───
 AddTool("self.music.cast_audio",
         "Putar lagu atau musik lewat Chromecast. Gunakan tool ini kalau user minta memutar lagu, "
         "musik, atau nyanyi. Args:\n"
@@ -564,29 +564,17 @@ AddTool("self.music.cast_audio",
             }
 
             std::string stb_ip = GetStbIpAuto();
-            std::string url = "http://" + stb_ip + "/api/musik-stb.php";
+            // GUNAKAN GET (seperti play_room)
+            std::string url = "http://" + stb_ip + "/api/musik-stb.php?mode=audio&token=36f3c4fe160bcdd665cb30041bde2b8f&q=" + UrlEncode(query);
 
-            // Siapkan Body JSON (POST)
-            cJSON* root = cJSON_CreateObject();
-            cJSON_AddStringToObject(root, "token", "36f3c4fe160bcdd665cb30041bde2b8f"); // ⚠️ GANTI DENGAN TOKEN ASLI
-            cJSON_AddStringToObject(root, "mode", "audio");
-            cJSON_AddStringToObject(root, "query", query.c_str());
-            char* json_str = cJSON_PrintUnformatted(root);
-            std::string payload(json_str);
-            cJSON_free(json_str);
-            cJSON_Delete(root);
-
-            // Kirim HTTP POST
             auto http = Board::GetInstance().GetNetwork()->CreateHttp(15);
             if (!http) return "Gagal buat HTTP client";
 
-            if (auto opened = http->Open("POST", url); !opened) {
+            if (auto opened = http->Open("GET", url); !opened) {
                 ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
                 return "Gagal konek ke server.";
             }
 
-            http->SetHeader("Content-Type", "application/json");
-            http->Write(payload.c_str(), payload.length());
             std::string response = http->ReadAll();
             http->Close();
 
@@ -609,7 +597,7 @@ AddTool("self.music.cast_audio",
             return result_str;
         });
 
-    // ─── Tool: Play Video di SmartTube (BARU) ───
+    // ─── Tool: Play Video di SmartTube (BARU - GET) ───
 AddTool("self.music.play_video_stb",
         "Putar video YouTube di layar SmartTube (STB Android). "
         "Gunakan tool ini kalau user minta memutar video atau menonton sesuatu. Args:\n"
@@ -633,29 +621,17 @@ AddTool("self.music.play_video_stb",
             }
 
             std::string stb_ip = GetStbIpAuto();
-            std::string url = "http://" + stb_ip + "/api/musik-stb.php";
+            // GUNAKAN GET (seperti play_room)
+            std::string url = "http://" + stb_ip + "/api/musik-stb.php?mode=video&token=36f3c4fe160bcdd665cb30041bde2b8f&q=" + UrlEncode(query);
 
-            // Siapkan Body JSON (POST)
-            cJSON* root = cJSON_CreateObject();
-            cJSON_AddStringToObject(root, "token", "36f3c4fe160bcdd665cb30041bde2b8f"); // ⚠️ GANTI DENGAN TOKEN ASLI (SAMA SEPERTI DI ATAS)
-            cJSON_AddStringToObject(root, "mode", "video");
-            cJSON_AddStringToObject(root, "query", query.c_str());
-            char* json_str = cJSON_PrintUnformatted(root);
-            std::string payload(json_str);
-            cJSON_free(json_str);
-            cJSON_Delete(root);
-
-            // Kirim HTTP POST
-            auto http = Board::GetInstance().GetNetwork()->CreateHttp(30); // Timeout lebih lama (30 detik)
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(15);
             if (!http) return "Gagal buat HTTP client";
 
-            if (auto opened = http->Open("POST", url); !opened) {
+            if (auto opened = http->Open("GET", url); !opened) {
                 ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
                 return "Gagal konek ke server.";
             }
 
-            http->SetHeader("Content-Type", "application/json");
-            http->Write(payload.c_str(), payload.length());
             std::string response = http->ReadAll();
             http->Close();
 
@@ -677,7 +653,7 @@ AddTool("self.music.play_video_stb",
 
             return result_str;
         });
-
+    
 // Taro disni ketika tanbah tool baru
 
     // Restore the original tools list to the end of the tools list
