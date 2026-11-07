@@ -896,6 +896,8 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
             // Return to idle so the device is not stuck in the connecting
             // state (not every failure path reports a network error)
             SetDeviceState(kDeviceStateIdle);
+            // Trigger Muka Sedih saat Gagal ───
+            board.GetDisplay()->SetEmotion("sad");
             return;
         }
     }
@@ -1288,22 +1290,25 @@ void Application::CheckAndPlayPendingMusic() {
 }
 
 void Application::StopNotification() {
-    // ─── 1. Stop playback lokal ESP32 (SEKETIKA) ───
     notify_player_.Stop();
     audio_service_.ResetDecoder();
+    
     auto& board = Board::GetInstance();
-    // ─── TAMBAHAN: Balikin mata ke normal pas musik berhenti ───
-    board.GetDisplay()->SetFaceState(0); 
-    board.GetDisplay()->SetChatMessage("assistant", "");
+    auto display = board.GetDisplay();
+    
+    // ─── Reset Muka ke Normal/Netral saat Force Stop ───
+    display->SetFaceState(0); 
+    display->SetEmotion("neutral");
+    display->SetChatMessage("assistant", "");
     board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
     
     if (GetDeviceState() == kDeviceStateNotifying) {
         SetDeviceState(kDeviceStateIdle);
     }
 
-    // ─── 2. Lempar tugas nembak STB ke Background Task ───
     SendRemoteStopCommand();
 }
+
 
 void Application::SendRemoteStopCommand() {
     // Cegah spam task
