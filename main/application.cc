@@ -882,28 +882,30 @@ void Application::HandleToggleChatEvent() {
 }
 
 void Application::ContinueOpenAudioChannel(ListeningMode mode) {
-    // Check state again in case it was changed during scheduling
     if (GetDeviceState() != kDeviceStateConnecting) {
         return;
     }
 
-    // Switch to performance mode before connecting to reduce latency
     auto& board = Board::GetInstance();
     board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
 
     if (!protocol_->IsAudioChannelOpened()) {
         if (!protocol_->OpenAudioChannel()) {
-            // Return to idle so the device is not stuck in the connecting
-            // state (not every failure path reports a network error)
             SetDeviceState(kDeviceStateIdle);
-            // Trigger Muka Sedih saat Gagal ───
-            board.GetDisplay()->SetEmotion("sad");
+            
+            // Eksekusi muka sedih saat gagal koneksi
+            auto display = board.GetDisplay();
+            if (display != nullptr) {
+                display->SetEmotion("sad"); // Otomatis jadi emosi index 5 di oled_display.cc[span_6](start_span)[span_6](end_span)
+                display->SetChatMessage("system", "Koneksi Gagal!");
+            }
             return;
         }
     }
 
     SetListeningMode(mode);
 }
+
 
 void Application::HandleStartListeningEvent() {
     auto state = GetDeviceState();
@@ -1071,7 +1073,11 @@ void Application::HandleStateChangedEvent() {
     switch (new_state) {
         case kDeviceStateUnknown:
         case kDeviceStateIdle:
-            display->SetFaceState(0);
+            // ─── Skenario Idle / Selesai (Set muka normal & emosi netral) ───
+            if (display != nullptr) {
+                display->SetFaceState(0);
+                display->SetEmotion("neutral");
+            }
             // Keep a just-raised network error visible. SetDeviceState(idle)
             // queues STATE_CHANGED after Alert(), and the idle handler would
             // otherwise wipe the status, emotion, and chat message.
@@ -1090,13 +1096,19 @@ void Application::HandleStateChangedEvent() {
                 esp_timer_start_once(music_delay_timer_, 2000000);  // 2 detik
             }
             break;
+            
         case kDeviceStateConnecting:
+            // ─── Skenario Connecting (Set face state & status) ───
+            if (display != nullptr) {
+                display->SetFaceState(0);
+            }
             display->SetStatus(Lang::Strings::CONNECTING);
             display->SetEmotion("neutral");
             display->SetChatMessage("system", "");
             break;
+            
         case kDeviceStateListening:
-            display->SetFaceState(1);
+            display->SetFaceState(1); // Muka mendengarkan
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
 
@@ -1115,8 +1127,9 @@ void Application::HandleStateChangedEvent() {
                 ConfigureWakeWordForListening();
             }
             break;
+            
         case kDeviceStateSpeaking:
-            display->SetFaceState(2);
+            display->SetFaceState(2); // Muka bicara / Bounce Mochi[span_1](start_span)[span_1](end_span)
             display->SetStatus(Lang::Strings::SPEAKING);
 
             if (listening_mode_ != kListeningModeRealtime) {
@@ -1126,21 +1139,25 @@ void Application::HandleStateChangedEvent() {
             }
             audio_service_.ResetDecoder();
             break;
+            
         case kDeviceStateNotifying:
+            display->SetFaceState(3); // Muka joget / musik[span_2](start_span)[span_2](end_span)
             display->SetStatus(Lang::Strings::SPEAKING);
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
             break;
+            
         case kDeviceStateWifiConfiguring:
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(false);
-
             break;
+            
         default:
             // Do nothing
             break;
     }
 }
+
 
 void Application::StartListeningAudio() {
     // Runs in the main loop, either directly from HandleStateChangedEvent or
@@ -1296,7 +1313,7 @@ void Application::StopNotification() {
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
     
-    // ─── Reset Muka ke Normal/Netral saat Force Stop ───
+    // Reset muka ke normal seketika saat dihentikan paksa
     display->SetFaceState(0); 
     display->SetEmotion("neutral");
     display->SetChatMessage("assistant", "");
@@ -1308,6 +1325,7 @@ void Application::StopNotification() {
 
     SendRemoteStopCommand();
 }
+
 
 
 void Application::SendRemoteStopCommand() {
