@@ -654,6 +654,48 @@ AddTool("self.music.play_video_stb",
             return result_str;
         });
 
+    // ─── Tool: Kontrol Volume STB Android ───
+AddTool("self.stb.volume",
+        "Kontrol volume STB Android (0-15) yang berlaku untuk musik Chromecast dan video SmartTube.\n"
+        "Gunakan tool ini HANYA JIKA user menyebut 'volume STB' atau 'volume musik'.\n"
+        "Args:\n"
+        "  action: 'status' (lihat volume), 'set' (set ke level), 'up' (naik), 'down' (turun), 'mute'.\n"
+        "  level: (opsional) 0-15, hanya untuk action='set'.",
+        PropertyList({
+            Property("action", kPropertyTypeString),
+            Property("level", kPropertyTypeInteger, 0, 0, 15)
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            std::string action = properties["action"].value<std::string>();
+            int level = properties["level"].value<int>();
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/musik-stb.php?mode=volume&token=36f3c4fe160bcdd665cb30041bde2b8f&action=" + action;
+            if (action == "set") url += "&level=" + std::to_string(level);
+            
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+            if (http && http->Open("GET", url)) {
+                std::string response = http->ReadAll(); 
+                http->Close();
+                
+                // Parse JSON untuk dapetin angka volume
+                cJSON* root = cJSON_Parse(response.c_str());
+                if (root) {
+                    auto status = cJSON_GetObjectItem(root, "status");
+                    if (cJSON_IsString(status) && std::string(status->valuestring) == "ok") {
+                        auto vol = cJSON_GetObjectItem(root, "volume");
+                        if (cJSON_IsNumber(vol)) {
+                            std::string res = "Volume STB sekarang " + std::to_string(vol->valueint) + " dari 15.";
+                            cJSON_Delete(root);
+                            return res;
+                        }
+                    }
+                    cJSON_Delete(root);
+                }
+                return "Perintah volume STB (" + action + ") berhasil.";
+            }
+            return "Gagal kontrol volume STB.";
+        });
+
     // ─── Tool: Stop Audio Chromecast ───
 AddTool("self.music.stop_audio",
         "Hentikan pemutaran lagu di Chromecast. Gunakan jika user minta stop musik, matikan lagu, atau berhenti.",
