@@ -653,6 +653,40 @@ AddTool("self.music.play_video_stb",
 
             return result_str;
         });
+
+    // ─── Tool: Stop Audio Chromecast ───
+AddTool("self.music.stop_audio",
+        "Hentikan pemutaran lagu di Chromecast. Gunakan jika user minta stop musik, matikan lagu, atau berhenti.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/musik-stb.php?mode=stop_audio&token=36f3c4fe160bcdd665cb30041bde2b8f";
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+            if (http && http->Open("GET", url)) {
+                http->ReadAll(); http->Close();
+                return "Oke, musik Chromecast sudah dimatikan.";
+            }
+            return "Gagal matikan musik.";
+        });
+
+    // ─── Tool: Kontrol Video SmartTube ───
+AddTool("self.music.video_control",
+        "Kontrol video yang sedang diputar di SmartTube (Pause, Next, Prev, Stop).\n"
+        "Args:\n"
+        "  action: string, pilih salah satu: 'pause', 'next', 'prev', 'stop'.",
+        PropertyList({Property("action", kPropertyTypeString)}),
+        [](const PropertyList& properties) -> ReturnValue {
+            std::string action = properties["action"].value<std::string>();
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/musik-stb.php?mode=video_" + action + "&token=36f3c4fe160bcdd665cb30041bde2b8f";
+            
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
+            if (http && http->Open("GET", url)) {
+                http->ReadAll(); http->Close();
+                return "Oke, perintah video " + action + " sudah dijalankan.";
+            }
+            return "Gagal kontrol video.";
+        });
     
 // Taro disni ketika tanbah tool baru
 
