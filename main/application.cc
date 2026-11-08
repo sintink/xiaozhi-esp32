@@ -351,6 +351,17 @@ void Application::HandleNetworkConnectedEvent() {
 void Application::HandleNetworkDisconnectedEvent() {
     // Close current conversation when network disconnected
     auto state = GetDeviceState();
+
+     
+    // --- TAMBAHKAN KODE INI ---
+    if (state == kDeviceStateConnecting || state == kDeviceStateListening || state == kDeviceStateSpeaking) {
+        auto display = Board::GetInstance().GetDisplay();
+        if (display != nullptr) {
+            display->SetFaceState(11); // Sedih 5 Detik
+        }
+    }
+    // --------------------------
+    
     if (state == kDeviceStateNotifying) {
         StopNotification();
     }
@@ -875,8 +886,16 @@ void Application::HandleToggleChatEvent() {
         }
         SetListeningMode(mode);
     } else if (state == kDeviceStateSpeaking) {
+         // --- TAMBAHKAN KODE INI ---
+        auto display = Board::GetInstance().GetDisplay();
+        if (display != nullptr) display->SetFaceState(14); // Marah (5 detik)
+        // --------------------------
         AbortSpeaking(kAbortReasonNone);
     } else if (state == kDeviceStateListening) {
+        // --- TAMBAHKAN KODE INI ---
+        auto display = Board::GetInstance().GetDisplay();
+        if (display != nullptr) display->SetFaceState(13); // Nyipit (5 detik)
+        // --------------------------
         protocol_->CloseAudioChannel();
     }
 }
@@ -896,6 +915,7 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
             // Eksekusi muka sedih saat gagal koneksi
             auto display = board.GetDisplay();
             if (display != nullptr) {
+                display->SetFaceState(11);
                 display->SetEmotion("sad"); // Otomatis jadi emosi index 5 di oled_display.cc[span_6](start_span)[span_6](end_span)
                 display->SetChatMessage("system", "Koneksi Gagal!");
             }
@@ -1100,7 +1120,7 @@ void Application::HandleStateChangedEvent() {
         case kDeviceStateConnecting:
             // ─── Skenario Connecting (Set face state & status) ───
             if (display != nullptr) {
-                display->SetFaceState(0);
+                display->SetFaceState(10);
             }
             display->SetStatus(Lang::Strings::CONNECTING);
             display->SetEmotion("neutral");
@@ -1108,7 +1128,7 @@ void Application::HandleStateChangedEvent() {
             break;
             
         case kDeviceStateListening:
-            display->SetFaceState(1); // Muka mendengarkan
+            display->SetFaceState(12); // Muka mendengarkan
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
 
