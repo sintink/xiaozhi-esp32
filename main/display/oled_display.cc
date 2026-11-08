@@ -425,10 +425,232 @@ void OledDisplay::UpdateFace() {
         else is_blinking_ = false;
     }
 
+void OledDisplay::UpdateFace() {
+    if (left_eye_ == nullptr || right_eye_ == nullptr || mouth_ == nullptr) return;
+    if (esp_timer_get_time() - boot_time_us_ < 8000000LL) return; 
+
+    int64_t now = esp_timer_get_time() / 1000;
+    int bounce_y = 0;
+    float dance_tilt = 0.0f;
+
+    // --- LOGIKA TIMER 5 DETIK UNTUK STATE SEMENTARA ---
+    static int last_anim_state = -1;
+    static int64_t temp_timeout = 0;
+
+    if (anim_state_ != last_anim_state) {
+        last_anim_state = anim_state_;
+        // State 11 (Gagal), 13 (Batal Listening), 14 (Batal Ngobrol) = 5 Detik
+        if (anim_state_ == 11 || anim_state_ == 13 || anim_state_ == 14) {
+            temp_timeout = now + 5000;
+        }
+    }
+
+    // Cek apakah waktu 5 detik sudah habis
+    if ((anim_state_ == 11 || anim_state_ == 13 || anim_state_ == 14) && now > temp_timeout) {
+        anim_state_ = 0; // Balik ke Idle
+        last_anim_state = 0;
+    }
+    // ---------------------------------------------------
+
+    // Tempo joget (Tetap dipertahankan)
+    constexpr float kDanceBeatMs = 500.0f;
+
+    static int64_t last_activity_time = now;
+    static bool is_sleeping = false;
+    static int64_t wake_shock_timeout = 0;
+    static bool is_night_grogginess = false;
+
+    time_t now_sec = time(NULL);
+    struct tm timeinfo;
+    localtime_r(&now_sec, &timeinfo);
+    int current_hour = timeinfo.tm_hour;
+    bool is_night_time = (current_hour >= 22 || current_hour < 6);
+
+    // A. LOGIKA BANGUN TIDUR
+    if (ai_emotion_active_ || anim_state_ != 0) {
+        if (is_sleeping) {
+            if (is_night_time) {
+                wake_shock_timeout = now + 3500;
+                is_night_grogginess = true;
+            } else {
+                wake_shock_timeout = now + 1200;
+                is_night_grogginess = false;
+            }
+            current_emotion_ = 7; 
+        }
+        last_activity_time = now;
+        is_sleeping = false;
+    }
+
+    // B. FASE GROGGY
+    if (wake_shock_timeout > 0 && now < wake_shock_timeout) {
+        int64_t remaining = wake_shock_timeout - now;
+        if (is_night_grogginess && remaining < 2300) current_emotion_ = 9; 
+        else current_emotion_ = 7; 
+    } else {
+        if (wake_shock_timeout > 0) wake_shock_timeout = 0;
+        if (ai_emotion_active_ && now > ai_emotion_timeout_) {
+            ai_emotion_active_ = false; 
+            if (anim_state_ == 0) current_emotion_ = 0; 
+        }
+    }
+
+    // C. LOGIKA STATE (IDLE, SPEAKING, DANCE, & STATE BARU)
+    if (anim_state_ == 0 && wake_shock_timeout == 0) {
+        int64_t idle_time = now - last_activity_time;
+
+        if (!ai_emotion_active_ && idle_time > 25000) {
+            is_sleeping = true;
+            current_emotion_ = 3; 
+            target_look_x_ = 0;
+            target_look_y_ = 5;   
+        } 
+        else if (!ai_emotion_active_ && idle_time > 15000) {
+            if (idle_time > 20000) current_emotion_ = 5; 
+            else current_emotion_ = 9; 
+            if (now > next_look_) {
+                target_look_x_ = (esp_random() % 2 == 0) ? 14 : -14;
+                target_look_y_ = (esp_random() % 5) - 2;
+                next_look_ = now + 400 + (esp_random() % 600);
+            }
+        }
+        else if (!is_sleeping) {
+            if (!ai_emotion_active_ && now > next_emote_change_) {
+                int chance = esp_random() % 18;
+                if (chance < 8) current_emotion_ = 0;
+                else if (chance == 8) current_emotion_ = 1; 
+                else if (chance == 9) current_emotion_ = 6; 
+                else if (chance == 10) current_emotion_ = 9; 
+                else current_emotion_ = 0;
+                next_emote_change_ = now + 2500 + (esp_random() % 6000);
+            }
+            if (now > next_look_) {
+                int look_style = esp_random() % 6;
+                if (look_style == 0) {
+                    target_look_x_ = (esp_random() % 2 == 0) ? 12 : -12;
+                    target_look_y_ = (esp_random() % 5) - 2;
+                } else if (look_style == 1) {
+                    target_look_x_ = 0;
+                    target_look_y_ = -6; 
+                } else {
+                    target_look_x_ = (esp_random() % 9) - 4;
+                    target_look_y_ = (esp_random() % 5) - 2;
+                }
+                next_look_ = now + 1200 + (esp_random() % 4500);
+            }
+            if (!is_blinking_ && now > next_blink_) {
+                is_blinking_ = true; 
+                blink_start_ = now;
+                next_blink_ = now + 3000 + (esp_random() % 4000); 
+            }
+        }
+    } 
+    else if (anim_state_ == 2) { // SPEAKING
+        last_activity_time = now; 
+        target_look_x_ = 0; target_look_y_ = 0;
+        float wave1 = sin(now / 30.0);
+        float wave2 = sin(now / 10.0);
+        bounce_y = (int)((wave1 * 0.7 + wave2 * 0.3) * 4.0);
+    }
+    else if (anim_state_ == 3) { // DANCE
+        last_activity_time = now; 
+        is_sleeping = false;
+        current_emotion_ = 1;     
+        float ph = now * (float)M_PI / kDanceBeatMs; 
+        bounce_y = -(int)(fabsf(sinf(ph)) * 6.0f);
+        target_look_x_ = (int)(sinf(ph * 0.5f) * 8.0f);
+        target_look_y_ = (int)(cosf(ph) * 3.0f);
+        dance_tilt = sinf(ph * 0.5f) * 200.0f;
+        if (!is_blinking_ && now > next_blink_) {
+            is_blinking_ = true;
+            blink_start_ = now;
+            next_blink_ = now + 2500 + (esp_random() % 3000);
+        }
+    }
+    // === STATE BARU ===
+    else if (anim_state_ == 10) { // CONNECTING (Loading Bar Real-time)
+        last_activity_time = now;
+        is_sleeping = false;
+        current_emotion_ = 0;
+        target_look_x_ = 0; target_look_y_ = 0;
+    }
+    else if (anim_state_ == 11) { // GAGAL (Sedih - 5 Detik)
+        last_activity_time = now;
+        is_sleeping = false;
+        current_emotion_ = 5; // Set ke Sedih dari sistem asli
+        target_look_x_ = 0; target_look_y_ = 3;
+    }
+    else if (anim_state_ == 12) { // LISTENING (Happy Menyambut - Real-time)
+        last_activity_time = now;
+        is_sleeping = false;
+        current_emotion_ = 0; // Nanti di-override bentuknya di bawah
+        target_look_x_ = 0; target_look_y_ = -1; // Fokus lurus
+        if (!is_blinking_ && now > next_blink_) {
+            is_blinking_ = true;
+            blink_start_ = now;
+            next_blink_ = now + 3000 + (esp_random() % 2000);
+        }
+    }
+    else if (anim_state_ == 13) { // BATAL LISTENING (Nyipit - 5 Detik)
+        last_activity_time = now;
+        is_sleeping = false;
+        current_emotion_ = 0; 
+        target_look_x_ = 0; target_look_y_ = 0;
+    }
+    else if (anim_state_ == 14) { // BATAL NGOBROL (Marah - 5 Detik)
+        last_activity_time = now;
+        is_sleeping = false;
+        current_emotion_ = 2; // Set ke Marah dari sistem asli
+        target_look_x_ = 0; target_look_y_ = 0;
+    }
+
+    // D. TRANSISI & RENDER
+    UpdateTargetShape(current_emotion_);
+
+    // --- OVERRIDE BENTUK MATA UNTUK STATE BARU ---
+    if (anim_state_ == 10) {
+        // Connecting: Bentuk kecil, nanti di-render kedip bergantian
+        target_w_ = 20; target_h_ = 14; target_r_ = 6;
+        target_angle_l_ = 0; target_angle_r_ = 0;
+    } 
+    else if (anim_state_ == 12) {
+        // Listening: Melengkung ke atas (Happy)
+        target_w_ = 32; target_h_ = 20; target_r_ = 10; 
+        target_angle_l_ = 0; target_angle_r_ = 0;
+    }
+    else if (anim_state_ == 13) {
+        // Batal Listening: Nyipit/Garis
+        target_w_ = 34; target_h_ = 6; target_r_ = 3; 
+        target_angle_l_ = 0; target_angle_r_ = 0;
+    }
+
+    target_angle_l_ += (int)dance_tilt;
+    target_angle_r_ += (int)dance_tilt;
+    
+    current_w_ += (target_w_ - current_w_) * 0.25f;
+    current_h_ += (target_h_ - current_h_) * 0.25f;
+    current_r_ += (target_r_ - current_r_) * 0.25f;
+    current_angle_l_ += (target_angle_l_ - current_angle_l_) * 0.25f;
+    current_angle_r_ += (target_angle_r_ - current_angle_r_) * 0.25f;
+
+    float blink_mult = 1.0f;
+    if (is_blinking_ && !is_sleeping) {
+        int64_t elapsed = now - blink_start_;
+        if (elapsed < 50) blink_mult = 1.0f - ((float)elapsed / 50.0f);
+        else if (elapsed < 120) blink_mult = (float)(elapsed - 50) / 70.0f;
+        else is_blinking_ = false;
+    }
+
     int final_lh = (int)(current_h_ * blink_mult);
     int final_rh = (int)(current_h_ * blink_mult);
 
-    // Lirik & Breathing
+    // === EFEK LOADING BAR (KEDIP BERGANTIAN) UNTUK CONNECTING ===
+    if (anim_state_ == 10) {
+        bool left_on = (now / 400) % 2 == 0; // Ganti tiap 400ms
+        final_lh = left_on ? (int)current_h_ : 2;
+        final_rh = left_on ? 2 : (int)current_h_;
+    }
+
     look_x_ += (target_look_x_ - look_x_) * 0.5f;
     look_y_ += (target_look_y_ - look_y_) * 0.5f;
     
@@ -452,16 +674,24 @@ void OledDisplay::UpdateFace() {
 
     if (is_sleeping) {
         mouth_w = 4; mouth_h = 2;
-    } else if (current_emotion_ == 7 || wake_shock_timeout > 0) {
-        mouth_w = 8; mouth_h = 8; mouth_r = LV_RADIUS_CIRCLE; // Mangap 'o' pas kaget
+    } 
+    else if (anim_state_ == 10) { // Connecting
+        mouth_w = 4; mouth_h = 2; mouth_r = 1; 
+    } 
+    else if (anim_state_ == 12) { // Listening (Senyum manis)
+        mouth_w = 10; mouth_h = 3; mouth_r = 2; 
+    }
+    else if (anim_state_ == 11 || anim_state_ == 14) { // Gagal / Marah (Cemberut)
+        mouth_w = 6; mouth_h = 2; mouth_r = 1; 
+    }
+    else if (current_emotion_ == 7 || wake_shock_timeout > 0) {
+        mouth_w = 8; mouth_h = 8; mouth_r = LV_RADIUS_CIRCLE; 
     } else if (anim_state_ == 3) {
-        // Mulut ikut mangap kecil mengikuti beat (dicek sebelum emosi Happy)
         float mouth_wave = sinf(now * (float)M_PI / kDanceBeatMs * 2.0f);
         mouth_w = 10 + (int)(mouth_wave * 2.0f);
-        mouth_h = 4;
-        mouth_r = 2;
+        mouth_h = 4; mouth_r = 2;
     } else if (current_emotion_ == 1 || current_emotion_ == 8) {
-        mouth_w = 12; mouth_h = 4; mouth_r = 3; // Senyum
+        mouth_w = 12; mouth_h = 4; mouth_r = 3; 
     } else if (anim_state_ == 2) {
         float mouth_wave = sin(now / 20.0);
         mouth_w = 6 + (int)(mouth_wave * 4.0);
