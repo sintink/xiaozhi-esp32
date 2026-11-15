@@ -729,6 +729,50 @@ AddTool("self.music.video_control",
             }
             return "Gagal kontrol video.";
         });
+
+    // ─── Tool: Kontrol Power STB (On/Off/Status) ───
+AddTool("self.stb.control",
+        "Kontrol Server STB. Gunakan tool ini untuk menyalakan, mematikan, atau mengecek status Server.\n"
+        "Args:\n"
+        "  action: string, pilih salah satu: 'on', 'off', atau 'status'.",
+        PropertyList({Property("action", kPropertyTypeString)}),
+        [](const PropertyList& properties) -> ReturnValue {
+            std::string action = properties["action"].value<std::string>();
+            std::string stb_ip = GetStbIpAuto();
+            std::string url = "http://" + stb_ip + "/api/stb-power.php?token=36f3c4fe160bcdd665cb30041bde2b8f&action=" + action;
+            
+            ESP_LOGI(TAG, "Power request ke: %s", url.c_str());
+            
+            // Timeout 15 detik karena butuh waktu buat bangunin STB (sleep 3 di PHP)
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(15);
+            if (!http) return "Gagal buat HTTP client";
+
+            if (auto opened = http->Open("GET", url); !opened) {
+                ESP_LOGE(TAG, "Gagal buka STB: %s", opened.error().ToString().c_str());
+                return "Gagal konek ke Server.";
+            }
+
+            std::string response = http->ReadAll();
+            http->Close();
+
+            // Parse JSON dari PHP untuk dapetin pesan
+            cJSON* root = cJSON_Parse(response.c_str());
+            std::string result_str = "Perintah power (" + action + ") berhasil.";
+            
+            if (root) {
+                auto status = cJSON_GetObjectItem(root, "status");
+                auto pesan = cJSON_GetObjectItem(root, "pesan");
+                
+                if (cJSON_IsString(status) && std::string(status->valuestring) == "ok") {
+                    if (cJSON_IsString(pesan)) result_str = pesan->valuestring;
+                } else {
+                    if (cJSON_IsString(pesan)) result_str = "Gagal: " + std::string(pesan->valuestring);
+                    else result_str = "Gagal mengeksekusi perintah power.";
+                }
+                cJSON_Delete(root);
+            }
+            return result_str;
+        });
     
 // Taro disni ketika tanbah tool baru
 
