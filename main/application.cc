@@ -1098,6 +1098,8 @@ void Application::HandleStateChangedEvent() {
                 display->SetFaceState(0);
                 display->SetEmotion("neutral");
             }
+
+               EspNowSend("IDLE", "Kembali ke Berita");
             // Keep a just-raised network error visible. SetDeviceState(idle)
             // queues STATE_CHANGED after Alert(), and the idle handler would
             // otherwise wipe the status, emotion, and chat message.
@@ -1125,12 +1127,16 @@ void Application::HandleStateChangedEvent() {
             display->SetStatus(Lang::Strings::CONNECTING);
             display->SetEmotion("neutral");
             display->SetChatMessage("system", "");
+
+              EspNowSend("LISTENING", "Menghubungkan...");
             break;
             
         case kDeviceStateListening:
             display->SetFaceState(12); // Muka mendengarkan
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
+
+               EspNowSend("LISTENING", "Mendengarkan..."); 
 
             // Make sure the audio processor is running
             if (play_popup_on_listening_ || !audio_service_.IsAudioProcessorRunning()) {
