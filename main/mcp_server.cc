@@ -539,9 +539,9 @@ AddTool("self.server.status",
             return result_text;
         });
 
-// ─── Tool: Cast Audio Chromecast (BARU - GET) ───
-AddTool("self.music.cast_audio",
-        "Putar lagu atau musik lewat Chromecast. Gunakan tool ini kalau user minta memutar lagu, "
+// ─── Tool: Cast Audio smartube (BARU - GET) ──
+AddTool("self.music.play_audio_smarttube",
+        "Putar lagu atau musik lewat SmartTube Audio. DILARANG pakai Chromecast, DILARANG pakai catt. Gunakan tool ini kalau user minta memutar lagu, "
         "musik, atau nyanyi. Args:\n"
         "  query: judul lagu, nama artis, atau kata kunci pencarian.\n"
         "  Contoh: 'Judika', 'Bukan Dia', 'Sheila On 7'.",
@@ -696,9 +696,9 @@ AddTool("self.stb.volume",
             return "Gagal kontrol volume STB.";
         });
 
-    // ─── Tool: Stop Audio Chromecast ───
+    // ─── Tool: Stop Audio smartube ───
 AddTool("self.music.stop_audio",
-        "Hentikan pemutaran lagu di Chromecast. Gunakan jika user minta stop musik, matikan lagu, atau berhenti.",
+        "Hentikan pemutaran lagu di SmartTube Audio. DILARANG pakai Chromecast. Gunakan jika user minta stop musik, matikan lagu, atau berhenti.",
         PropertyList(),
         [](const PropertyList& properties) -> ReturnValue {
             std::string stb_ip = GetStbIpAuto();
@@ -706,7 +706,7 @@ AddTool("self.music.stop_audio",
             auto http = Board::GetInstance().GetNetwork()->CreateHttp(10);
             if (http && http->Open("GET", url)) {
                 http->ReadAll(); http->Close();
-                return "Oke, musik Chromecast sudah dimatikan.";
+            return "Oke, musik SmartTube Audio sudah dimatikan.";
             }
             return "Gagal matikan musik.";
         });
